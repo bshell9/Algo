@@ -20,16 +20,14 @@ inventoryRouter.get('/', async (req: AuthRequest, res: Response) => {
     const where: any = {};
     if (shopId) where.shopId = shopId;
     if (status) where.status = status;
-    if (lowStock === 'true') {
-      where.quantity = { lte: prisma.shopInventory.fields.reorderPoint };
-    }
+    // lowStock filter handled after query since SQLite can't compare columns directly
     if (search) {
       where.nagsPart = {
         OR: [
-          { nagsPartNumber: { contains: search as string, mode: 'insensitive' } },
-          { description: { contains: search as string, mode: 'insensitive' } },
-          { fitsMake: { contains: search as string, mode: 'insensitive' } },
-          { fitsModel: { contains: search as string, mode: 'insensitive' } },
+          { nagsPartNumber: { contains: search as string } },
+          { description: { contains: search as string } },
+          { fitsMake: { contains: search as string } },
+          { fitsModel: { contains: search as string } },
         ],
       };
     }
@@ -135,14 +133,22 @@ inventoryRouter.put('/:id/adjust', async (req: AuthRequest, res: Response) => {
 // GET /api/inventory/low-stock - Low stock alerts across all shops
 inventoryRouter.get('/low-stock/alerts', async (_req: AuthRequest, res: Response) => {
   try {
-    const lowStockItems = await prisma.$queryRaw`
-      SELECT si.*, np."nagsPartNumber", np.description, s.name as "shopName", s.code as "shopCode"
-      FROM "ShopInventory" si
-      JOIN "NAGSPart" np ON si."nagsPartId" = np.id
-      JOIN "Shop" s ON si."shopId" = s.id
-      WHERE si.quantity <= si."reorderPoint"
-      ORDER BY si.quantity ASC
-    `;
+    const allItems = await prisma.shopInventory.findMany({
+      include: {
+        nagsPart: { select: { nagsPartNumber: true, description: true } },
+        shop: { select: { name: true, code: true } },
+      },
+      orderBy: { quantity: 'asc' },
+    });
+    const lowStockItems = allItems
+      .filter((item) => item.quantity <= item.reorderPoint)
+      .map((item) => ({
+        ...item,
+        nagsPartNumber: item.nagsPart?.nagsPartNumber,
+        description: item.nagsPart?.description,
+        shopName: item.shop?.name,
+        shopCode: item.shop?.code,
+      }));
     res.json({ success: true, data: lowStockItems });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Failed to fetch low stock alerts' });

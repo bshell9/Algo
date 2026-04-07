@@ -75,20 +75,28 @@ Complete autoglass shop management & POS system with pod (mobile unit) dispatch,
 └── shared/                 # Shared types & constants
 ```
 
-## Setup
+## Setup (Easy - SQLite, no database install needed!)
+
+Just need Node.js 18+ installed. No PostgreSQL or other database required.
 
 ```bash
-# Install dependencies
+# 1. Install dependencies
 npm install
+cd server && npm install
+cd ../client && npm install
+cd ..
 
-# Set up database
-cp server/.env.example server/.env
-# Edit .env with your PostgreSQL connection string
-cd server && npx prisma migrate dev && npx prisma db seed
+# 2. Set up database (creates a local SQLite file automatically)
+cd server
+npx prisma migrate dev --name init
+npx prisma db seed
+cd ..
 
-# Start development
+# 3. Start the app
 npm run dev
 ```
+
+Then open http://localhost:5173 in your browser.
 
 ## Default Login
 - Email: `admin@autoglass.com`

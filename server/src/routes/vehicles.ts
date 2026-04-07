@@ -26,10 +26,10 @@ vehicleRouter.get('/', async (req: AuthRequest, res: Response) => {
     const search = req.query.search as string;
     const where = search ? {
       OR: [
-        { vin: { contains: search, mode: 'insensitive' as const } },
-        { make: { contains: search, mode: 'insensitive' as const } },
-        { model: { contains: search, mode: 'insensitive' as const } },
-        { plateNumber: { contains: search, mode: 'insensitive' as const } },
+        { vin: { contains: search } },
+        { make: { contains: search } },
+        { model: { contains: search } },
+        { plateNumber: { contains: search } },
       ],
     } : {};
     const vehicles = await prisma.vehicle.findMany({

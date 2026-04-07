@@ -18,8 +18,8 @@ invoiceRouter.get('/', async (req: AuthRequest, res: Response) => {
     if (status) where.status = status;
     if (search) {
       where.OR = [
-        { invoiceNumber: { contains: search as string, mode: 'insensitive' } },
-        { customer: { lastName: { contains: search as string, mode: 'insensitive' } } },
+        { invoiceNumber: { contains: search as string } },
+        { customer: { lastName: { contains: search as string } } },
       ];
     }
 

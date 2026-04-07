@@ -32,11 +32,11 @@ customerRouter.get('/', async (req: AuthRequest, res: Response) => {
     const search = req.query.search as string;
     const where = search ? {
       OR: [
-        { firstName: { contains: search, mode: 'insensitive' as const } },
-        { lastName: { contains: search, mode: 'insensitive' as const } },
+        { firstName: { contains: search } },
+        { lastName: { contains: search } },
         { phone: { contains: search } },
-        { email: { contains: search, mode: 'insensitive' as const } },
-        { company: { contains: search, mode: 'insensitive' as const } },
+        { email: { contains: search } },
+        { company: { contains: search } },
       ],
     } : {};
 

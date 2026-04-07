@@ -15,12 +15,12 @@ nagsRouter.get('/parts', async (req: AuthRequest, res: Response) => {
     const where: any = { isActive: true };
     if (search) {
       where.OR = [
-        { nagsPartNumber: { contains: search as string, mode: 'insensitive' } },
-        { description: { contains: search as string, mode: 'insensitive' } },
+        { nagsPartNumber: { contains: search as string } },
+        { description: { contains: search as string } },
       ];
     }
-    if (make) where.fitsMake = { equals: make as string, mode: 'insensitive' };
-    if (model) where.fitsModel = { equals: model as string, mode: 'insensitive' };
+    if (make) where.fitsMake = { equals: make as string };
+    if (model) where.fitsModel = { equals: model as string };
     if (year) {
       const y = parseInt(year as string);
       where.fitsYearFrom = { lte: y };
@@ -86,8 +86,8 @@ nagsRouter.get('/lookup', async (req: AuthRequest, res: Response) => {
 
     const y = parseInt(year as string);
     const where: any = {
-      fitsMake: { equals: make as string, mode: 'insensitive' },
-      fitsModel: { equals: model as string, mode: 'insensitive' },
+      fitsMake: { equals: make as string },
+      fitsModel: { equals: model as string },
       fitsYearFrom: { lte: y },
       fitsYearTo: { gte: y },
       isActive: true,
@@ -130,7 +130,7 @@ nagsRouter.get('/makes', async (_req: AuthRequest, res: Response) => {
 nagsRouter.get('/models/:make', async (req: AuthRequest, res: Response) => {
   try {
     const models = await prisma.nAGSPart.findMany({
-      where: { isActive: true, fitsMake: { equals: req.params.make, mode: 'insensitive' } },
+      where: { isActive: true, fitsMake: { equals: req.params.make } },
       select: { fitsModel: true },
       distinct: ['fitsModel'],
       orderBy: { fitsModel: 'asc' },

@@ -1,6 +1,6 @@
 -- CreateTable
 CREATE TABLE "User" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "email" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
     "firstName" TEXT NOT NULL,
@@ -11,26 +11,24 @@ CREATE TABLE "User" (
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "shopId" TEXT,
     "podId" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "User_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "User_podId_fkey" FOREIGN KEY ("podId") REFERENCES "Pod" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "RefreshToken" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "token" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "expiresAt" TIMESTAMP(3) NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "RefreshToken_pkey" PRIMARY KEY ("id")
+    "expiresAt" DATETIME NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
 CREATE TABLE "Shop" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "address" TEXT NOT NULL,
@@ -43,17 +41,15 @@ CREATE TABLE "Shop" (
     "nagsId" TEXT,
     "timezone" TEXT NOT NULL DEFAULT 'America/Chicago',
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "taxRate" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
-    "laborRate" DOUBLE PRECISION NOT NULL DEFAULT 50.0,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Shop_pkey" PRIMARY KEY ("id")
+    "taxRate" REAL NOT NULL DEFAULT 0.0,
+    "laborRate" REAL NOT NULL DEFAULT 50.0,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "Customer" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
     "email" TEXT,
@@ -69,16 +65,14 @@ CREATE TABLE "Customer" (
     "fleetName" TEXT,
     "notes" TEXT,
     "totalJobs" INTEGER NOT NULL DEFAULT 0,
-    "totalRevenue" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Customer_pkey" PRIMARY KEY ("id")
+    "totalRevenue" REAL NOT NULL DEFAULT 0,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "Vehicle" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "customerId" TEXT NOT NULL,
     "vin" TEXT,
     "year" INTEGER NOT NULL,
@@ -90,15 +84,14 @@ CREATE TABLE "Vehicle" (
     "plateNumber" TEXT,
     "plateState" TEXT,
     "nagsVehicleId" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Vehicle_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Vehicle_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "WorkOrder" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "orderNumber" TEXT NOT NULL,
     "shopId" TEXT NOT NULL,
     "customerId" TEXT NOT NULL,
@@ -109,7 +102,7 @@ CREATE TABLE "WorkOrder" (
     "status" TEXT NOT NULL DEFAULT 'pending',
     "jobType" TEXT NOT NULL DEFAULT 'replacement',
     "glassPosition" TEXT NOT NULL DEFAULT 'windshield',
-    "scheduledDate" TIMESTAMP(3),
+    "scheduledDate" DATETIME,
     "scheduledSlot" TEXT,
     "scheduledTime" TEXT,
     "serviceLocation" TEXT NOT NULL DEFAULT 'shop',
@@ -121,60 +114,63 @@ CREATE TABLE "WorkOrder" (
     "partDescription" TEXT,
     "partType" TEXT NOT NULL DEFAULT 'aftermarket',
     "glassVendor" TEXT,
-    "retailPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "partCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "laborCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "moldingCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "kitCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "otherCharges" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "discount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "taxAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "totalAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "retailPrice" REAL NOT NULL DEFAULT 0,
+    "partCost" REAL NOT NULL DEFAULT 0,
+    "laborCost" REAL NOT NULL DEFAULT 0,
+    "moldingCost" REAL NOT NULL DEFAULT 0,
+    "kitCost" REAL NOT NULL DEFAULT 0,
+    "otherCharges" REAL NOT NULL DEFAULT 0,
+    "discount" REAL NOT NULL DEFAULT 0,
+    "taxAmount" REAL NOT NULL DEFAULT 0,
+    "totalAmount" REAL NOT NULL DEFAULT 0,
     "isInsuranceJob" BOOLEAN NOT NULL DEFAULT false,
     "insuranceCompanyCode" TEXT,
     "claimNumber" TEXT,
     "policyNumber" TEXT,
-    "deductible" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "insurancePays" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "customerPays" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "deductible" REAL NOT NULL DEFAULT 0,
+    "insurancePays" REAL NOT NULL DEFAULT 0,
+    "customerPays" REAL NOT NULL DEFAULT 0,
     "requiresCalibration" BOOLEAN NOT NULL DEFAULT false,
     "calibrationType" TEXT,
-    "calibrationCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "calibrationCost" REAL NOT NULL DEFAULT 0,
     "csrNotes" TEXT,
     "techNotes" TEXT,
     "dispatchNotes" TEXT,
-    "dispatchedAt" TIMESTAMP(3),
-    "arrivedAt" TIMESTAMP(3),
-    "startedAt" TIMESTAMP(3),
-    "completedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "WorkOrder_pkey" PRIMARY KEY ("id")
+    "dispatchedAt" DATETIME,
+    "arrivedAt" DATETIME,
+    "startedAt" DATETIME,
+    "completedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "WorkOrder_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "WorkOrder_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "WorkOrder_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES "Vehicle" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "WorkOrder_podId_fkey" FOREIGN KEY ("podId") REFERENCES "Pod" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "WorkOrder_technicianId_fkey" FOREIGN KEY ("technicianId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "WorkOrder_csrId_fkey" FOREIGN KEY ("csrId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "WorkOrderLineItem" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "workOrderId" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "nagsPartNumber" TEXT,
     "partType" TEXT,
     "quantity" INTEGER NOT NULL DEFAULT 1,
-    "unitPrice" DOUBLE PRECISION NOT NULL,
-    "cost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "total" DOUBLE PRECISION NOT NULL,
+    "unitPrice" REAL NOT NULL,
+    "cost" REAL NOT NULL DEFAULT 0,
+    "total" REAL NOT NULL,
     "isTaxable" BOOLEAN NOT NULL DEFAULT true,
     "category" TEXT NOT NULL DEFAULT 'glass',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "WorkOrderLineItem_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "WorkOrderLineItem_workOrderId_fkey" FOREIGN KEY ("workOrderId") REFERENCES "WorkOrder" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "Pod" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "vehiclePlate" TEXT,
@@ -183,21 +179,20 @@ CREATE TABLE "Pod" (
     "vehicleYear" INTEGER,
     "shopId" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'available',
-    "currentLat" DOUBLE PRECISION,
-    "currentLng" DOUBLE PRECISION,
-    "lastLocationUpdate" TIMESTAMP(3),
+    "currentLat" REAL,
+    "currentLng" REAL,
+    "lastLocationUpdate" DATETIME,
     "maxJobsPerDay" INTEGER NOT NULL DEFAULT 6,
     "serviceRadius" INTEGER NOT NULL DEFAULT 50,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Pod_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Pod_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "NAGSPart" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "nagsPartNumber" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "partType" TEXT NOT NULL DEFAULT 'aftermarket',
@@ -208,9 +203,9 @@ CREATE TABLE "NAGSPart" (
     "fitsModel" TEXT,
     "fitsSubModel" TEXT,
     "fitsBodyStyle" TEXT,
-    "width" DOUBLE PRECISION,
-    "height" DOUBLE PRECISION,
-    "thickness" DOUBLE PRECISION,
+    "width" REAL,
+    "height" REAL,
+    "thickness" REAL,
     "tinted" BOOLEAN NOT NULL DEFAULT false,
     "heated" BOOLEAN NOT NULL DEFAULT false,
     "antenna" BOOLEAN NOT NULL DEFAULT false,
@@ -219,65 +214,62 @@ CREATE TABLE "NAGSPart" (
     "encapsulated" BOOLEAN NOT NULL DEFAULT false,
     "vendor" TEXT,
     "vendorPartNumber" TEXT,
-    "listPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "cost" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "listPrice" REAL NOT NULL DEFAULT 0,
+    "cost" REAL NOT NULL DEFAULT 0,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "NAGSPart_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "ShopInventory" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "shopId" TEXT NOT NULL,
     "nagsPartId" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL DEFAULT 0,
     "minQuantity" INTEGER NOT NULL DEFAULT 1,
     "maxQuantity" INTEGER NOT NULL DEFAULT 10,
     "reorderPoint" INTEGER NOT NULL DEFAULT 2,
-    "cost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "retailPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "cost" REAL NOT NULL DEFAULT 0,
+    "retailPrice" REAL NOT NULL DEFAULT 0,
     "binLocation" TEXT,
     "status" TEXT NOT NULL DEFAULT 'in_stock',
-    "lastCountedAt" TIMESTAMP(3),
-    "lastOrderedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "ShopInventory_pkey" PRIMARY KEY ("id")
+    "lastCountedAt" DATETIME,
+    "lastOrderedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ShopInventory_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "ShopInventory_nagsPartId_fkey" FOREIGN KEY ("nagsPartId") REFERENCES "NAGSPart" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "PodInventory" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "podId" TEXT NOT NULL,
     "nagsPartId" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL DEFAULT 0,
-    "loadedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "PodInventory_pkey" PRIMARY KEY ("id")
+    "loadedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "PodInventory_podId_fkey" FOREIGN KEY ("podId") REFERENCES "Pod" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "PodInventory_nagsPartId_fkey" FOREIGN KEY ("nagsPartId") REFERENCES "NAGSPart" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "MoldingKit" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "nagsPartId" TEXT NOT NULL,
     "moldingPartNumber" TEXT NOT NULL,
     "description" TEXT NOT NULL,
-    "cost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "retailPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "cost" REAL NOT NULL DEFAULT 0,
+    "retailPrice" REAL NOT NULL DEFAULT 0,
     "isRequired" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "MoldingKit_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "MoldingKit_nagsPartId_fkey" FOREIGN KEY ("nagsPartId") REFERENCES "NAGSPart" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "InventoryTransfer" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "transferNumber" TEXT NOT NULL,
     "fromShopId" TEXT NOT NULL,
     "toShopId" TEXT NOT NULL,
@@ -286,74 +278,74 @@ CREATE TABLE "InventoryTransfer" (
     "status" TEXT NOT NULL DEFAULT 'pending',
     "requestedBy" TEXT NOT NULL,
     "approvedBy" TEXT,
-    "shippedAt" TIMESTAMP(3),
-    "receivedAt" TIMESTAMP(3),
+    "shippedAt" DATETIME,
+    "receivedAt" DATETIME,
     "notes" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "InventoryTransfer_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "InventoryTransfer_fromShopId_fkey" FOREIGN KEY ("fromShopId") REFERENCES "Shop" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "InventoryTransfer_toShopId_fkey" FOREIGN KEY ("toShopId") REFERENCES "Shop" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "PurchaseOrder" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "poNumber" TEXT NOT NULL,
     "shopId" TEXT NOT NULL,
     "vendor" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'draft',
-    "subtotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "shippingCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "taxAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "totalAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "orderedAt" TIMESTAMP(3),
-    "expectedAt" TIMESTAMP(3),
-    "receivedAt" TIMESTAMP(3),
+    "subtotal" REAL NOT NULL DEFAULT 0,
+    "shippingCost" REAL NOT NULL DEFAULT 0,
+    "taxAmount" REAL NOT NULL DEFAULT 0,
+    "totalAmount" REAL NOT NULL DEFAULT 0,
+    "orderedAt" DATETIME,
+    "expectedAt" DATETIME,
+    "receivedAt" DATETIME,
     "notes" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "PurchaseOrder_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "PurchaseOrder_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "PurchaseOrderItem" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "purchaseOrderId" TEXT NOT NULL,
     "nagsPartNumber" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL,
     "receivedQuantity" INTEGER NOT NULL DEFAULT 0,
-    "unitCost" DOUBLE PRECISION NOT NULL,
-    "total" DOUBLE PRECISION NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "PurchaseOrderItem_pkey" PRIMARY KEY ("id")
+    "unitCost" REAL NOT NULL,
+    "total" REAL NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PurchaseOrderItem_purchaseOrderId_fkey" FOREIGN KEY ("purchaseOrderId") REFERENCES "PurchaseOrder" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "ScheduleEntry" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "workOrderId" TEXT NOT NULL,
     "podId" TEXT,
     "technicianId" TEXT,
     "shopId" TEXT NOT NULL,
-    "date" TIMESTAMP(3) NOT NULL,
+    "date" DATETIME NOT NULL,
     "slot" TEXT NOT NULL DEFAULT 'morning',
     "startTime" TEXT NOT NULL,
     "endTime" TEXT NOT NULL,
     "estimatedDuration" INTEGER NOT NULL DEFAULT 90,
     "isConfirmed" BOOLEAN NOT NULL DEFAULT false,
     "reminderSent" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "ScheduleEntry_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ScheduleEntry_workOrderId_fkey" FOREIGN KEY ("workOrderId") REFERENCES "WorkOrder" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "ScheduleEntry_podId_fkey" FOREIGN KEY ("podId") REFERENCES "Pod" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "ScheduleEntry_technicianId_fkey" FOREIGN KEY ("technicianId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "ScheduleEntry_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "InsuranceClaim" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "workOrderId" TEXT NOT NULL,
     "claimNumber" TEXT NOT NULL,
     "policyNumber" TEXT NOT NULL,
@@ -362,88 +354,86 @@ CREATE TABLE "InsuranceClaim" (
     "adjusterName" TEXT,
     "adjusterPhone" TEXT,
     "adjusterEmail" TEXT,
-    "dateOfLoss" TIMESTAMP(3) NOT NULL,
+    "dateOfLoss" DATETIME NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'draft',
     "approvalNumber" TEXT,
-    "approvedAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "deductible" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "customerResponsibility" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "approvedAmount" REAL NOT NULL DEFAULT 0,
+    "deductible" REAL NOT NULL DEFAULT 0,
+    "customerResponsibility" REAL NOT NULL DEFAULT 0,
     "ediReferralId" TEXT,
     "ediLastTransactionType" TEXT,
-    "ediLastTransactionDate" TIMESTAMP(3),
+    "ediLastTransactionDate" DATETIME,
     "deductibleWaiver" BOOLEAN NOT NULL DEFAULT false,
-    "waiverAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "waiverAmount" REAL NOT NULL DEFAULT 0,
     "notes" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "InsuranceClaim_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "InsuranceClaim_workOrderId_fkey" FOREIGN KEY ("workOrderId") REFERENCES "WorkOrder" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "EDIMessage" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "claimId" TEXT NOT NULL,
     "transactionType" TEXT NOT NULL,
     "direction" TEXT NOT NULL,
     "rawContent" TEXT NOT NULL,
-    "parsedData" JSONB,
+    "parsedData" TEXT,
     "status" TEXT NOT NULL DEFAULT 'sent',
     "errorMessage" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "EDIMessage_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "EDIMessage_claimId_fkey" FOREIGN KEY ("claimId") REFERENCES "InsuranceClaim" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "Invoice" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "invoiceNumber" TEXT NOT NULL,
     "workOrderId" TEXT NOT NULL,
     "customerId" TEXT NOT NULL,
     "shopId" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'draft',
-    "subtotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "taxAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "discount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "total" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "amountPaid" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "amountDue" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "dueDate" TIMESTAMP(3) NOT NULL,
-    "paidDate" TIMESTAMP(3),
+    "subtotal" REAL NOT NULL DEFAULT 0,
+    "taxAmount" REAL NOT NULL DEFAULT 0,
+    "discount" REAL NOT NULL DEFAULT 0,
+    "total" REAL NOT NULL DEFAULT 0,
+    "amountPaid" REAL NOT NULL DEFAULT 0,
+    "amountDue" REAL NOT NULL DEFAULT 0,
+    "dueDate" DATETIME NOT NULL,
+    "paidDate" DATETIME,
     "notes" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Invoice_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Invoice_workOrderId_fkey" FOREIGN KEY ("workOrderId") REFERENCES "WorkOrder" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Invoice_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Invoice_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "InvoiceLineItem" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "invoiceId" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL DEFAULT 1,
-    "unitPrice" DOUBLE PRECISION NOT NULL,
-    "total" DOUBLE PRECISION NOT NULL,
+    "unitPrice" REAL NOT NULL,
+    "total" REAL NOT NULL,
     "isTaxable" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "InvoiceLineItem_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "InvoiceLineItem_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "Invoice" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "Payment" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "invoiceId" TEXT NOT NULL,
     "shopId" TEXT NOT NULL,
     "posSessionId" TEXT,
     "transactionType" TEXT NOT NULL DEFAULT 'sale',
     "paymentMethod" TEXT NOT NULL,
-    "amount" DOUBLE PRECISION NOT NULL,
-    "tipAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "processingFee" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "netAmount" DOUBLE PRECISION NOT NULL,
+    "amount" REAL NOT NULL,
+    "tipAmount" REAL NOT NULL DEFAULT 0,
+    "processingFee" REAL NOT NULL DEFAULT 0,
+    "netAmount" REAL NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'pending',
     "referenceNumber" TEXT,
     "authorizationCode" TEXT,
@@ -452,57 +442,58 @@ CREATE TABLE "Payment" (
     "checkNumber" TEXT,
     "receiptNumber" TEXT NOT NULL,
     "processedById" TEXT NOT NULL,
-    "processedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "voidedAt" TIMESTAMP(3),
+    "processedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "voidedAt" DATETIME,
     "voidedBy" TEXT,
     "refundReason" TEXT,
     "notes" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Payment_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "Invoice" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Payment_processedById_fkey" FOREIGN KEY ("processedById") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Payment_posSessionId_fkey" FOREIGN KEY ("posSessionId") REFERENCES "POSSession" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "POSSession" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "shopId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "openedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "closedAt" TIMESTAMP(3),
-    "openingBalance" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "closingBalance" DOUBLE PRECISION,
-    "cashSales" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "cardSales" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "checkSales" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "insuranceSales" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "totalSales" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "totalRefunds" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "netSales" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "openedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "closedAt" DATETIME,
+    "openingBalance" REAL NOT NULL DEFAULT 0,
+    "closingBalance" REAL,
+    "cashSales" REAL NOT NULL DEFAULT 0,
+    "cardSales" REAL NOT NULL DEFAULT 0,
+    "checkSales" REAL NOT NULL DEFAULT 0,
+    "insuranceSales" REAL NOT NULL DEFAULT 0,
+    "totalSales" REAL NOT NULL DEFAULT 0,
+    "totalRefunds" REAL NOT NULL DEFAULT 0,
+    "netSales" REAL NOT NULL DEFAULT 0,
     "transactionCount" INTEGER NOT NULL DEFAULT 0,
     "isOpen" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "POSSession_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "POSSession_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "POSSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "CashDrawerAction" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "sessionId" TEXT NOT NULL,
     "type" TEXT NOT NULL,
-    "amount" DOUBLE PRECISION NOT NULL,
+    "amount" REAL NOT NULL,
     "reason" TEXT,
     "performedById" TEXT NOT NULL,
-    "performedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "CashDrawerAction_pkey" PRIMARY KEY ("id")
+    "performedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "CashDrawerAction_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "POSSession" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "CashDrawerAction_performedById_fkey" FOREIGN KEY ("performedById") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "Quote" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "quoteNumber" TEXT NOT NULL,
     "customerId" TEXT,
     "shopId" TEXT NOT NULL,
@@ -516,59 +507,57 @@ CREATE TABLE "Quote" (
     "nagsPartNumber" TEXT,
     "partDescription" TEXT,
     "partType" TEXT NOT NULL DEFAULT 'aftermarket',
-    "partCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "laborCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "moldingCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "kitCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "calibrationCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "otherCharges" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "discount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "taxAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "totalAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "partCost" REAL NOT NULL DEFAULT 0,
+    "laborCost" REAL NOT NULL DEFAULT 0,
+    "moldingCost" REAL NOT NULL DEFAULT 0,
+    "kitCost" REAL NOT NULL DEFAULT 0,
+    "calibrationCost" REAL NOT NULL DEFAULT 0,
+    "otherCharges" REAL NOT NULL DEFAULT 0,
+    "discount" REAL NOT NULL DEFAULT 0,
+    "taxAmount" REAL NOT NULL DEFAULT 0,
+    "totalAmount" REAL NOT NULL DEFAULT 0,
     "isInsuranceJob" BOOLEAN NOT NULL DEFAULT false,
     "insuranceCompanyCode" TEXT,
-    "deductible" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "customerPays" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "insurancePays" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "validUntil" TIMESTAMP(3) NOT NULL,
+    "deductible" REAL NOT NULL DEFAULT 0,
+    "customerPays" REAL NOT NULL DEFAULT 0,
+    "insurancePays" REAL NOT NULL DEFAULT 0,
+    "validUntil" DATETIME NOT NULL,
     "isConverted" BOOLEAN NOT NULL DEFAULT false,
     "convertedWorkOrderId" TEXT,
     "notes" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Quote_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Quote_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "Quote_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "Notification" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL,
     "type" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "message" TEXT NOT NULL,
     "isRead" BOOLEAN NOT NULL DEFAULT false,
-    "readAt" TIMESTAMP(3),
+    "readAt" DATETIME,
     "actionUrl" TEXT,
-    "metadata" JSONB,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
+    "metadata" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "AuditLog" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL,
     "action" TEXT NOT NULL,
     "entity" TEXT NOT NULL,
     "entityId" TEXT,
-    "oldData" JSONB,
-    "newData" JSONB,
+    "oldData" TEXT,
+    "newData" TEXT,
     "ipAddress" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "AuditLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateIndex
@@ -822,126 +811,3 @@ CREATE INDEX "AuditLog_entity_entityId_idx" ON "AuditLog"("entity", "entityId");
 
 -- CreateIndex
 CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
-
--- AddForeignKey
-ALTER TABLE "User" ADD CONSTRAINT "User_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "User" ADD CONSTRAINT "User_podId_fkey" FOREIGN KEY ("podId") REFERENCES "Pod"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Vehicle" ADD CONSTRAINT "Vehicle_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "WorkOrder" ADD CONSTRAINT "WorkOrder_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "WorkOrder" ADD CONSTRAINT "WorkOrder_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "WorkOrder" ADD CONSTRAINT "WorkOrder_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES "Vehicle"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "WorkOrder" ADD CONSTRAINT "WorkOrder_podId_fkey" FOREIGN KEY ("podId") REFERENCES "Pod"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "WorkOrder" ADD CONSTRAINT "WorkOrder_technicianId_fkey" FOREIGN KEY ("technicianId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "WorkOrder" ADD CONSTRAINT "WorkOrder_csrId_fkey" FOREIGN KEY ("csrId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "WorkOrderLineItem" ADD CONSTRAINT "WorkOrderLineItem_workOrderId_fkey" FOREIGN KEY ("workOrderId") REFERENCES "WorkOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Pod" ADD CONSTRAINT "Pod_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ShopInventory" ADD CONSTRAINT "ShopInventory_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ShopInventory" ADD CONSTRAINT "ShopInventory_nagsPartId_fkey" FOREIGN KEY ("nagsPartId") REFERENCES "NAGSPart"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PodInventory" ADD CONSTRAINT "PodInventory_podId_fkey" FOREIGN KEY ("podId") REFERENCES "Pod"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PodInventory" ADD CONSTRAINT "PodInventory_nagsPartId_fkey" FOREIGN KEY ("nagsPartId") REFERENCES "NAGSPart"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "MoldingKit" ADD CONSTRAINT "MoldingKit_nagsPartId_fkey" FOREIGN KEY ("nagsPartId") REFERENCES "NAGSPart"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "InventoryTransfer" ADD CONSTRAINT "InventoryTransfer_fromShopId_fkey" FOREIGN KEY ("fromShopId") REFERENCES "Shop"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "InventoryTransfer" ADD CONSTRAINT "InventoryTransfer_toShopId_fkey" FOREIGN KEY ("toShopId") REFERENCES "Shop"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PurchaseOrder" ADD CONSTRAINT "PurchaseOrder_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PurchaseOrderItem" ADD CONSTRAINT "PurchaseOrderItem_purchaseOrderId_fkey" FOREIGN KEY ("purchaseOrderId") REFERENCES "PurchaseOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ScheduleEntry" ADD CONSTRAINT "ScheduleEntry_workOrderId_fkey" FOREIGN KEY ("workOrderId") REFERENCES "WorkOrder"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ScheduleEntry" ADD CONSTRAINT "ScheduleEntry_podId_fkey" FOREIGN KEY ("podId") REFERENCES "Pod"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ScheduleEntry" ADD CONSTRAINT "ScheduleEntry_technicianId_fkey" FOREIGN KEY ("technicianId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ScheduleEntry" ADD CONSTRAINT "ScheduleEntry_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "InsuranceClaim" ADD CONSTRAINT "InsuranceClaim_workOrderId_fkey" FOREIGN KEY ("workOrderId") REFERENCES "WorkOrder"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "EDIMessage" ADD CONSTRAINT "EDIMessage_claimId_fkey" FOREIGN KEY ("claimId") REFERENCES "InsuranceClaim"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_workOrderId_fkey" FOREIGN KEY ("workOrderId") REFERENCES "WorkOrder"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "InvoiceLineItem" ADD CONSTRAINT "InvoiceLineItem_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "Invoice"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Payment" ADD CONSTRAINT "Payment_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "Invoice"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Payment" ADD CONSTRAINT "Payment_processedById_fkey" FOREIGN KEY ("processedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Payment" ADD CONSTRAINT "Payment_posSessionId_fkey" FOREIGN KEY ("posSessionId") REFERENCES "POSSession"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "POSSession" ADD CONSTRAINT "POSSession_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "POSSession" ADD CONSTRAINT "POSSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "CashDrawerAction" ADD CONSTRAINT "CashDrawerAction_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "POSSession"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "CashDrawerAction" ADD CONSTRAINT "CashDrawerAction_performedById_fkey" FOREIGN KEY ("performedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Quote" ADD CONSTRAINT "Quote_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Quote" ADD CONSTRAINT "Quote_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Notification" ADD CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

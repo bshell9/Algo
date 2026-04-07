@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 // ═══════════════════════════════════════════════
@@ -541,7 +541,7 @@ model EDIMessage {
   transactionType  String   // 837, 835, 824, etc.
   direction        String   // inbound, outbound
   rawContent       String
-  parsedData       Json?
+  parsedData       String?
   status           String   @default("sent") // sent, received, processed, error
   errorMessage     String?
   createdAt        DateTime @default(now())
@@ -749,7 +749,7 @@ model Notification {
   isRead    Boolean  @default(false)
   readAt    DateTime?
   actionUrl String?
-  metadata  Json?
+  metadata  String?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
@@ -768,8 +768,8 @@ model AuditLog {
   action     String   // create, update, delete, login, logout, etc.
   entity     String   // work_order, customer, payment, etc.
   entityId   String?
-  oldData    Json?
-  newData    Json?
+  oldData    String?
+  newData    String?
   ipAddress  String?
   createdAt  DateTime @default(now())
 

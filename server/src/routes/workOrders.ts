@@ -68,10 +68,10 @@ workOrderRouter.get('/', async (req: AuthRequest, res: Response) => {
     }
     if (search) {
       where.OR = [
-        { orderNumber: { contains: search as string, mode: 'insensitive' } },
-        { customer: { lastName: { contains: search as string, mode: 'insensitive' } } },
+        { orderNumber: { contains: search as string } },
+        { customer: { lastName: { contains: search as string } } },
         { customer: { phone: { contains: search as string } } },
-        { nagsPartNumber: { contains: search as string, mode: 'insensitive' } },
+        { nagsPartNumber: { contains: search as string } },
       ];
     }
 

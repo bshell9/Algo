@@ -17,9 +17,9 @@ claimRouter.get('/', async (req: AuthRequest, res: Response) => {
     if (insuranceCompanyCode) where.insuranceCompanyCode = insuranceCompanyCode;
     if (search) {
       where.OR = [
-        { claimNumber: { contains: search as string, mode: 'insensitive' } },
-        { policyNumber: { contains: search as string, mode: 'insensitive' } },
-        { insuranceCompanyName: { contains: search as string, mode: 'insensitive' } },
+        { claimNumber: { contains: search as string } },
+        { policyNumber: { contains: search as string } },
+        { insuranceCompanyName: { contains: search as string } },
       ];
     }
 
