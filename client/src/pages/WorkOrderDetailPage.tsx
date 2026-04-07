@@ -217,20 +217,226 @@ function LineItemsGrid({ order }: { order: any }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TAB: CUSTOMER
+   TAB: CUSTOMER (GlasAve-style full form)
    ═══════════════════════════════════════════════════════════════ */
 function CustomerTab({ order }: { order: any }) {
-  const c = order.customer;
-  if (!c) return <div>No customer</div>;
+  const c = order.customer || {};
+  const [form, setForm] = useState({
+    salutation: '', firstName: c.firstName || '', lastName: c.lastName || '',
+    address: c.address || '', zipCode: c.zip || '', city: c.city || '', state: c.state || '',
+    phone: c.phone || '', cell: c.altPhone || '', email: c.email || '',
+    terms: 'NET 10', advertisingSource: c.source || '', jobLocation: order.serviceLocation || 'shop',
+    optOutEmail: false, optOutSurvey: false,
+    // Bill To
+    billToSearch: '', billToName: c.company || '',
+    ediCode: 'None', agentSearch: '', agentName: '', referredBy: '',
+    customerPO: '', custJobNumber: '',
+  });
+
+  const updateField = (field: string, value: string | boolean) => setForm({ ...form, [field]: value });
+
   return (
-    <div className="grid grid-cols-2 gap-4 max-w-3xl">
-      <div><label className="label-ga">First Name</label><input className="input-ga" value={c.firstName} readOnly /></div>
-      <div><label className="label-ga">Last Name</label><input className="input-ga" value={c.lastName} readOnly /></div>
-      <div><label className="label-ga">Phone</label><input className="input-ga" value={c.phone} readOnly /></div>
-      <div><label className="label-ga">Email</label><input className="input-ga" value={c.email || ''} readOnly /></div>
-      <div className="col-span-2"><label className="label-ga">Address</label><input className="input-ga" value={`${c.address || ''} ${c.city || ''} ${c.state || ''} ${c.zip || ''}`} readOnly /></div>
-      <div><label className="label-ga">Company</label><input className="input-ga" value={c.company || ''} readOnly /></div>
-      <div><label className="label-ga">Source</label><input className="input-ga capitalize" value={c.source?.replace(/_/g, ' ') || ''} readOnly /></div>
+    <div className="flex gap-6">
+      {/* ─── LEFT SIDE: Cash Customer ─── */}
+      <div className="flex-1" style={{ maxWidth: '520px' }}>
+        {/* Customer Search */}
+        <div className="flex items-center gap-2 mb-3">
+          <input className="input-ga flex-1" placeholder="CUSTOMER SEARCH" />
+          <button className="w-6 h-6 rounded text-white text-xs flex items-center justify-center" style={{ background: '#1a7a1a' }}>+</button>
+          <button className="w-6 h-6 rounded text-white text-xs flex items-center justify-center" style={{ background: '#cc3333' }}>X</button>
+        </div>
+
+        <div className="font-bold text-sm mb-2" style={{ color: '#1a7a1a' }}>Cash Customer</div>
+
+        {/* Salutation / First / Last */}
+        <div className="grid grid-cols-12 gap-2 mb-2">
+          <div className="col-span-2">
+            <label className="label-ga">Salutation</label>
+            <select className="select-ga" value={form.salutation} onChange={(e) => updateField('salutation', e.target.value)}>
+              <option value=""></option><option>Mr.</option><option>Mrs.</option><option>Ms.</option><option>Dr.</option>
+            </select>
+          </div>
+          <div className="col-span-5">
+            <label className="label-ga">First Name</label>
+            <input className="input-ga" value={form.firstName} onChange={(e) => updateField('firstName', e.target.value)} />
+          </div>
+          <div className="col-span-5">
+            <label className="label-ga">Last Name</label>
+            <input className="input-ga" value={form.lastName} onChange={(e) => updateField('lastName', e.target.value)} />
+          </div>
+        </div>
+
+        {/* Address / Zip */}
+        <div className="grid grid-cols-12 gap-2 mb-2">
+          <div className="col-span-8">
+            <label className="label-ga">Address</label>
+            <input className="input-ga" placeholder="ADDRESS" value={form.address} onChange={(e) => updateField('address', e.target.value)} />
+          </div>
+          <div className="col-span-4">
+            <label className="label-ga">Zip Code</label>
+            <input className="input-ga" placeholder="ZIP CODE" value={form.zipCode} onChange={(e) => updateField('zipCode', e.target.value)} />
+          </div>
+        </div>
+
+        {/* City / State / Validate */}
+        <div className="grid grid-cols-12 gap-2 mb-2">
+          <div className="col-span-5">
+            <label className="label-ga">City</label>
+            <input className="input-ga" placeholder="CITY" value={form.city} onChange={(e) => updateField('city', e.target.value)} />
+          </div>
+          <div className="col-span-4">
+            <label className="label-ga">State</label>
+            <select className="select-ga" value={form.state} onChange={(e) => updateField('state', e.target.value)}>
+              <option value=""></option>
+              {['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="col-span-3 flex items-end">
+            <button className="btn-ga-outline w-full">Validate</button>
+          </div>
+        </div>
+
+        {/* Phone / Cell */}
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div>
+            <label className="label-ga">Phone</label>
+            <input className="input-ga" value={form.phone} onChange={(e) => updateField('phone', e.target.value)} />
+          </div>
+          <div>
+            <label className="label-ga">Cell</label>
+            <input className="input-ga" value={form.cell} onChange={(e) => updateField('cell', e.target.value)} />
+          </div>
+        </div>
+
+        {/* Email / Terms */}
+        <div className="grid grid-cols-12 gap-2 mb-2">
+          <div className="col-span-5">
+            <label className="label-ga">Email</label>
+            <input className="input-ga" placeholder="Email" value={form.email} onChange={(e) => updateField('email', e.target.value)} />
+          </div>
+          <div className="col-span-1 flex items-end justify-center">
+            <button className="text-lg" title="Send Email" style={{ color: '#1a7a1a' }}>&#9993;</button>
+          </div>
+          <div className="col-span-3">
+            <label className="label-ga">Terms</label>
+            <select className="select-ga" value={form.terms} onChange={(e) => updateField('terms', e.target.value)}>
+              <option>NET 10</option><option>NET 30</option><option>COD</option><option>Due on Receipt</option>
+            </select>
+          </div>
+          <div className="col-span-3 flex items-end">
+            <button className="btn-ga-outline w-full">History</button>
+          </div>
+        </div>
+
+        {/* Advertising Source / Job Location */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div>
+            <label className="label-ga">Advertising Source</label>
+            <select className="select-ga" value={form.advertisingSource} onChange={(e) => updateField('advertisingSource', e.target.value)}>
+              <option value="">Select</option>
+              <option value="walk_in">Walk In</option><option value="phone">Phone</option><option value="website">Website</option>
+              <option value="insurance_referral">Insurance Referral</option><option value="fleet">Fleet</option><option value="dealer">Dealer</option>
+              <option value="repeat">Repeat</option><option value="referral">Referral</option><option value="advertising">Advertising</option>
+            </select>
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="label-ga">Job Location</label>
+              <select className="select-ga" value={form.jobLocation} onChange={(e) => updateField('jobLocation', e.target.value)}>
+                <option value="shop">Shop (waiting)</option><option value="mobile">Mobile</option><option value="customer">Customer</option>
+              </select>
+            </div>
+            <button className="text-lg mb-0.5" title="Map" style={{ color: '#1a7a1a' }}>&#128279;</button>
+          </div>
+        </div>
+
+        {/* Opt-out checkboxes */}
+        <div className="flex gap-6">
+          <label className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={form.optOutEmail} onChange={(e) => updateField('optOutEmail', e.target.checked)} /> Opt Out Email
+          </label>
+          <label className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={form.optOutSurvey} onChange={(e) => updateField('optOutSurvey', e.target.checked)} /> Opt Out Email Survey
+          </label>
+        </div>
+      </div>
+
+      {/* ─── RIGHT SIDE: Bill To / EDI / Agent ─── */}
+      <div className="flex-1" style={{ maxWidth: '480px' }}>
+        {/* Bill To */}
+        <div className="mb-4">
+          <div className="font-bold text-sm mb-2" style={{ color: '#1a7a1a' }}>Bill To</div>
+          <div className="flex items-center gap-2 mb-2">
+            <input className="input-ga flex-1" placeholder="BILL TO SEARCH" value={form.billToSearch} onChange={(e) => updateField('billToSearch', e.target.value)} />
+            <button className="w-6 h-6 rounded text-white text-xs flex items-center justify-center" style={{ background: '#1a7a1a' }}>+</button>
+            <button className="w-6 h-6 rounded text-white text-xs flex items-center justify-center" style={{ background: '#cc3333' }}>X</button>
+          </div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex-1">
+              <label className="label-ga">Name</label>
+              <input className="input-ga" value={form.billToName} onChange={(e) => updateField('billToName', e.target.value)} />
+            </div>
+            <button className="mt-4 text-lg" title="Edit" style={{ color: '#1a7a1a' }}>&#9998;</button>
+            <button className="mt-4 text-lg" title="Copy" style={{ color: '#666' }}>&#128203;</button>
+          </div>
+        </div>
+
+        {/* EDI Code */}
+        <div className="mb-4">
+          <label className="label-ga">EDI Code</label>
+          <div className="flex items-center gap-2">
+            <select className="select-ga flex-1" value={form.ediCode} onChange={(e) => updateField('ediCode', e.target.value)}>
+              <option>None</option>
+              <option>SAF - Safelite Solutions</option><option>LYN - Lynx Services</option><option>HRS - Harmon Solutions</option>
+              <option>STA - State Farm</option><option>ALL - Allstate</option><option>PRG - Progressive</option>
+              <option>GEI - GEICO</option><option>USR - USAA</option><option>FRM - Farmers</option>
+              <option>LIB - Liberty Mutual</option><option>NAT - Nationwide</option><option>TRV - Travelers</option>
+            </select>
+            <button className="text-gray-400 hover:text-red-500">&#10005;</button>
+            <button className="btn-ga-green">Claim</button>
+            <button className="btn-ga-green">ClaimLaunch</button>
+            <button className="text-lg" style={{ color: '#1a7a1a' }}>&#9993;</button>
+          </div>
+        </div>
+
+        {/* Agent */}
+        <div className="mb-4">
+          <div className="font-bold text-sm mb-2" style={{ color: '#1a7a1a' }}>Agent</div>
+          <div className="flex items-center gap-2 mb-2">
+            <input className="input-ga flex-1" placeholder="AGENT SEARCH" value={form.agentSearch} onChange={(e) => updateField('agentSearch', e.target.value)} />
+            <button className="w-6 h-6 rounded text-white text-xs flex items-center justify-center" style={{ background: '#1a7a1a' }}>+</button>
+            <button className="w-6 h-6 rounded text-white text-xs flex items-center justify-center" style={{ background: '#cc3333' }}>X</button>
+          </div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex-1">
+              <label className="label-ga">Name</label>
+              <input className="input-ga" value={form.agentName} onChange={(e) => updateField('agentName', e.target.value)} />
+            </div>
+            <button className="mt-4 text-lg" title="Edit" style={{ color: '#1a7a1a' }}>&#9998;</button>
+            <button className="mt-4 text-lg" title="Copy" style={{ color: '#666' }}>&#128203;</button>
+          </div>
+        </div>
+
+        {/* Referred By */}
+        <div className="mb-4">
+          <label className="label-ga">Referred By</label>
+          <select className="select-ga" value={form.referredBy} onChange={(e) => updateField('referredBy', e.target.value)}>
+            <option value="">Select</option>
+          </select>
+        </div>
+
+        {/* Customer PO/RO + Cust Job # */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label-ga">Customer PO/RO</label>
+            <input className="input-ga" placeholder="PO NO." value={form.customerPO} onChange={(e) => updateField('customerPO', e.target.value)} />
+          </div>
+          <div>
+            <label className="label-ga">Cust. Job #</label>
+            <input className="input-ga" placeholder="JOB NUMBER" value={form.custJobNumber} onChange={(e) => updateField('custJobNumber', e.target.value)} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
