@@ -27,28 +27,28 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-primary-900 to-gray-900">
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0d5e0d 0%, #1a7a1a 50%, #0d5e0d 100%)' }}>
       <div className="max-w-md w-full mx-4">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white">AutoGlass</h1>
-          <p className="text-primary-300 text-lg">Pod Management System</p>
-          <p className="text-gray-400 text-sm mt-2">Full POS + Omega + GlasAve Features</p>
+        <div className="text-center mb-6">
+          <div className="inline-block px-6 py-2 rounded-lg text-white text-3xl font-bold mb-3" style={{ background: '#0d5e0d', border: '3px solid #fff' }}>
+            AutoGlass Pod
+          </div>
+          <p className="text-white/80 text-sm">Shop Management System</p>
         </div>
 
-        <form onSubmit={handleLogin} className="bg-white rounded-2xl shadow-2xl p-8 space-y-5">
+        <form onSubmit={handleLogin} className="bg-white rounded-lg shadow-2xl p-6 space-y-4" style={{ border: '2px solid #c0c0c0' }}>
           <div>
-            <label className="label">Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-field" placeholder="admin@autoglass.com" required />
+            <label className="label-ga">Email</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-ga" placeholder="admin@autoglass.com" required />
           </div>
           <div>
-            <label className="label">Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-field" placeholder="Enter password" required />
+            <label className="label-ga">Password</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-ga" placeholder="Enter password" required />
           </div>
-          <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3">
+          <button type="submit" disabled={loading} className="btn-ga-action w-full justify-center py-2">
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
-
-          <div className="text-center pt-3 border-t">
+          <div className="text-center pt-2 border-t" style={{ borderColor: '#ddd' }}>
             <p className="text-xs text-gray-500">Demo: admin@autoglass.com / password123</p>
           </div>
         </form>
