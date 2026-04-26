@@ -22,6 +22,8 @@ import POSPage from './pages/POSPage';
 import QuotesPage from './pages/QuotesPage';
 import ReportsPage from './pages/ReportsPage';
 import ShopsPage from './pages/ShopsPage';
+import ReferralPage from './pages/ReferralPage';
+import AgentReferralsPage from './pages/AgentReferralsPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -32,6 +34,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/refer" element={<ReferralPage />} />
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route index element={<DashboardPage />} />
         <Route path="work-orders" element={<WorkOrdersPage />} />
@@ -53,6 +56,8 @@ export default function App() {
         <Route path="quotes" element={<QuotesPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="shops" element={<ShopsPage />} />
+        <Route path="referrals" element={<AgentReferralsPage />} />
+        <Route path="referrals/:id" element={<AgentReferralsPage />} />
       </Route>
     </Routes>
   );

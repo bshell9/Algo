@@ -21,6 +21,7 @@ import { dashboardRouter } from './routes/dashboard';
 import { shopRouter } from './routes/shops';
 import { reportRouter } from './routes/reports';
 import { nagsRouter } from './routes/nags';
+import { referralRouter } from './routes/referrals';
 
 dotenv.config();
 
@@ -54,6 +55,7 @@ app.use('/api/pos', posRouter);
 app.use('/api/quotes', quoteRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/reports', reportRouter);
+app.use('/api/referrals', referralRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {
