@@ -15,6 +15,7 @@ const mainNav = [
   { name: 'POS', href: '/pos' },
   { name: 'Quotes', href: '/quotes' },
   { name: 'Reports', href: '/reports' },
+  { name: 'Referrals', href: '/referrals' },
 ];
 
 const pageTitle: Record<string, string> = {
@@ -33,6 +34,7 @@ const pageTitle: Record<string, string> = {
   '/quotes': 'Quotes',
   '/reports': 'Reports',
   '/shops': 'Shops',
+  '/referrals': 'Agent Referrals',
 };
 
 export default function Layout() {

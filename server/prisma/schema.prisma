@@ -759,6 +759,51 @@ model Notification {
 }
 
 // ═══════════════════════════════════════════════
+// AGENT REFERRALS (MA insurance agent inbound)
+// ═══════════════════════════════════════════════
+
+model AgentReferral {
+  id              String    @id @default(uuid())
+  // Agent (the referrer)
+  agentName       String
+  agentEmail      String
+  agentPhone      String?
+  agencyName      String?
+  agentCity       String?
+  // Customer (the insured)
+  customerName    String
+  customerPhone   String
+  customerEmail   String?
+  customerCity    String?
+  customerZip     String?
+  // Vehicle / claim basics
+  vehicleYear     String?
+  vehicleMake     String?
+  vehicleModel    String?
+  damage          String?   // e.g. "windshield crack"
+  carrier         String?   // insurance carrier
+  claimNumber     String?
+  notes           String?
+  // Lifecycle
+  status          String    @default("new") // new, contacted, scheduled, completed, declined
+  source          String    @default("agent_portal")
+  firstContactAt  DateTime?
+  scheduledAt     DateTime?
+  completedAt     DateTime?
+  workOrderId     String?
+  // Tracking
+  receivedAt      DateTime  @default(now())
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([agentEmail])
+  @@index([status])
+  @@index([receivedAt])
+}
+
+// ═══════════════════════════════════════════════
 // AUDIT LOG
 // ═══════════════════════════════════════════════
 
