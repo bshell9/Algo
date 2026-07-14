@@ -1,102 +1,87 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Windows.Forms;
 
 namespace OcarinaExplorer;
 
 /// <summary>
-/// A file explorer styled after the Ocarina of Time pause menu.
-/// Every visual is drawn in code with GDI+ — no game assets are used.
+/// A file explorer styled as the OoT pause menu: four stone tablets float in a
+/// ring around the camera; one faces you, its neighbors lean in from the screen
+/// edges, and Q/E spins the whole room. All visuals are drawn in code.
 /// </summary>
-public sealed class MainForm : Form
+public sealed partial class MainForm : Form
 {
-    // ---- palette (original recreation of the pause-menu mood) ----
-    private static readonly Color BgTop = Color.FromArgb(58, 14, 26);
-    private static readonly Color BgBottom = Color.FromArgb(12, 4, 10);
-    private static readonly Color SlotFill = Color.FromArgb(150, 28, 24, 66);
-    private static readonly Color SlotEdge = Color.FromArgb(200, 96, 84, 160);
-    private static readonly Color GoldLight = Color.FromArgb(255, 230, 170);
-    private static readonly Color Gold = Color.FromArgb(232, 190, 78);
-    private static readonly Color GoldDark = Color.FromArgb(150, 110, 30);
-    private static readonly Color TextBoxFill = Color.FromArgb(185, 6, 10, 60);
-    private static readonly Color CButtonYellow = Color.FromArgb(250, 208, 56);
-    private static readonly Color HeartRed = Color.FromArgb(228, 32, 40);
-    private static readonly Color RupeeGreen = Color.FromArgb(60, 190, 90);
-    private static readonly Color NameCyan = Color.FromArgb(120, 220, 250);
-    private static readonly Color NameRed = Color.FromArgb(255, 120, 110);
-
+    // ---- panel textures ----
+    internal const int PanelW = 960;
+    internal const int PanelH = 640;
     private const int Cols = 6;
     private const int Rows = 4;
     private const int PageSize = Cols * Rows;
 
+    // ---- carousel geometry (camera at origin looking +Z) ----
+    private const float Radius = 1.0f;       // ring radius
+    private const float CamBack = 0.9f;      // ring pushed away from camera
+    private const float PanelW3D = 1.6f;     // panel width in world units
+    private const float PanelH3D = PanelW3D * PanelH / PanelW;
+    private const float NearZ = 0.14f;
+    private const float HalfPi = (float)(Math.PI / 2);
+
     private static readonly string[] ScreenTitles =
-        { "SELECT FILE", "FOLDER MAP", "QUEST STATUS", "EQUIPMENT" };
+        { "SELECT ITEM", "CLAUDE MAP", "QUEST STATUS", "EQUIPMENT" };
 
     private readonly System.Windows.Forms.Timer _animTimer;
-    private float _pulse;                 // 0..2pi, drives the cursor glow
-    private int _screen;                  // 0..3, current subscreen
-    private string? _currentPath;         // null => drive select ("world map")
+    private float _pulse;
+    private int _tick;
+
+    private int _screenIx;                   // unbounded; mod 4 = visible screen
+    private float _rotation;                 // radians, animated toward _screenIx * HalfPi
+
+    private readonly Bitmap[] _panels = new Bitmap[4];
+    private readonly bool[] _dirty = { true, true, true, true };
+
+    private string? _currentPath;            // null => drive select
     private List<Entry> _entries = new();
     private int _selected;
     private bool _showHidden;
-    private string _statusOverride = "";  // e.g. access-denied message
-    private readonly Entry?[] _cFavorites = new Entry?[3]; // C-Left, C-Down, C-Right
+    private SortMode _sort = SortMode.Newest;
+    private string _statusOverride = "";
+    private readonly Entry?[] _cFavorites = new Entry?[3];
+
+    private ClaudeSnapshot _claude = new();
+    private readonly SysInfo _sys = new();
+    private List<(string Name, long Size)> _incoming = new();  // in-flight downloads
+
+    private FileSystemWatcher? _watcher;
+    private volatile bool _pendingRefresh;
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _bannerQueue = new();
+    private readonly List<(string Text, DateTime Until)> _banners = new();
+
+    // drive stats sampled every ~2s so slow/sleeping drives can't stall painting
+    internal readonly record struct DriveStat(string Label, bool Ready, long Total, long Free);
+    internal List<DriveStat> DriveCache = new();
+    private float _heartFrac = 1f;
+
+    private string _msgCache = "";
+    private int _msgKeyScreen = -1;
+    private string? _msgKeySel;
+    private int _msgKeyCount = -1;
 
     private readonly Font _titleFont;
+    private readonly Font _headFont;
     private readonly Font _bodyFont;
     private readonly Font _smallFont;
     private readonly Font _tinyFont;
     private readonly Font _counterFont;
 
-    // hit regions rebuilt every paint
-    private RectangleF _leftArrow, _rightArrow;
+    private RectangleF _frontRect;           // where the front panel lands on screen
     private readonly RectangleF[] _cButtonRects = new RectangleF[3];
-    private RectangleF _gridArea;
 
-    public MainForm()
-    {
-        Text = "Ocarina Explorer";
-        DoubleBuffered = true;
-        BackColor = Color.Black;
-        ClientSize = new Size(1120, 800);
-        MinimumSize = new Size(860, 640);
-        StartPosition = FormStartPosition.CenterScreen;
-        KeyPreview = true;
+    private enum SortMode { Newest, Name, Size }
 
-        _titleFont = new Font("Georgia", 34f, FontStyle.Bold);
-        _bodyFont = new Font("Trebuchet MS", 13f, FontStyle.Bold);
-        _smallFont = new Font("Trebuchet MS", 9.5f, FontStyle.Bold);
-        _tinyFont = new Font("Trebuchet MS", 8f, FontStyle.Bold);
-        _counterFont = new Font("Georgia", 16f, FontStyle.Bold);
-
-        _animTimer = new System.Windows.Forms.Timer { Interval = 33 };
-        _animTimer.Tick += (_, _) => { _pulse += 0.16f; Invalidate(); };
-        _animTimer.Start();
-
-        LoadLocation(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            _animTimer.Dispose();
-            _titleFont.Dispose();
-            _bodyFont.Dispose();
-            _smallFont.Dispose();
-            _tinyFont.Dispose();
-            _counterFont.Dispose();
-        }
-        base.Dispose(disposing);
-    }
-
-    // =====================================================================
-    //  File-system model
-    // =====================================================================
-
-    private sealed class Entry
+    internal sealed class Entry
     {
         public required string Name;
         public required string FullPath;
@@ -108,6 +93,156 @@ public sealed class MainForm : Form
         public bool Hidden;
         public string Ext = "";
     }
+
+    public MainForm()
+    {
+        Text = "Ocarina Explorer";
+        DoubleBuffered = true;
+        BackColor = Color.Black;
+        ClientSize = new Size(1280, 860);
+        MinimumSize = new Size(980, 700);
+        StartPosition = FormStartPosition.CenterScreen;
+        KeyPreview = true;
+
+        _titleFont = new Font("Georgia", 30f, FontStyle.Bold);
+        _headFont = new Font("Georgia", 15f, FontStyle.Bold);
+        _bodyFont = new Font("Trebuchet MS", 13f, FontStyle.Bold);
+        _smallFont = new Font("Trebuchet MS", 10f, FontStyle.Bold);
+        _tinyFont = new Font("Trebuchet MS", 8f, FontStyle.Bold);
+        _counterFont = new Font("Georgia", 17f, FontStyle.Bold);
+
+        for (int i = 0; i < 4; i++)
+            _panels[i] = new Bitmap(PanelW, PanelH, PixelFormat.Format32bppPArgb);
+
+        _animTimer = new System.Windows.Forms.Timer { Interval = 33 };
+        _animTimer.Tick += OnTick;
+        _animTimer.Start();
+
+        _sys.Sample();
+        _claude = ClaudeSnapshot.Collect();
+        RefreshDriveCache();
+
+        LoadLocation(DownloadsPath());
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _animTimer.Dispose();
+            _watcher?.Dispose();
+            foreach (var b in _panels) b.Dispose();
+            _titleFont.Dispose(); _headFont.Dispose(); _bodyFont.Dispose();
+            _smallFont.Dispose(); _tinyFont.Dispose(); _counterFont.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+
+    private static string DownloadsPath()
+    {
+        string dl = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+        return Directory.Exists(dl)
+            ? dl : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    }
+
+    // =====================================================================
+    //  Animation / periodic refresh
+    // =====================================================================
+
+    private void OnTick(object? sender, EventArgs e)
+    {
+        _pulse += 0.16f;
+        _tick++;
+
+        float target = _screenIx * HalfPi;
+        float diff = target - _rotation;
+        if (Math.Abs(diff) > 0.0015f) _rotation += diff * 0.22f;
+        else _rotation = target;
+
+        if (_tick % 60 == 0) // every ~2s: refresh live dashboards
+        {
+            _sys.Sample();
+            _claude = ClaudeSnapshot.Collect();
+            ScanIncoming();
+            RefreshDriveCache();
+            _dirty[1] = _dirty[2] = true;
+        }
+
+        // debounced: an active download fires Changed events many times a second
+        if (_pendingRefresh && _tick % 15 == 0)
+        {
+            _pendingRefresh = false;
+            ReloadKeepingSelection();
+        }
+
+        while (_bannerQueue.TryDequeue(out var text))
+            _banners.Add((text, DateTime.Now.AddSeconds(4.5)));
+        _banners.RemoveAll(b => b.Until < DateTime.Now);
+
+        _dirty[Mod4(_screenIx)] = true; // front panel animates (cursor pulse, dots)
+        Invalidate();
+    }
+
+    private static int Mod4(int v) => ((v % 4) + 4) % 4;
+
+    private void RefreshDriveCache()
+    {
+        var list = new List<DriveStat>();
+        try
+        {
+            foreach (var d in DriveInfo.GetDrives())
+            {
+                string label = d.Name.TrimEnd('\\', '/');
+                bool ready = false;
+                long total = 0, free = 0;
+                try
+                {
+                    ready = d.IsReady;
+                    if (ready)
+                    {
+                        if (!string.IsNullOrEmpty(d.VolumeLabel)) label += "  " + d.VolumeLabel;
+                        total = d.TotalSize;
+                        free = d.TotalFreeSpace;
+                    }
+                }
+                catch (Exception) { ready = false; }
+                list.Add(new DriveStat(label, ready, total, free));
+            }
+        }
+        catch (Exception) { /* keep previous cache */ return; }
+        DriveCache = list;
+
+        try
+        {
+            var root = _currentPath is null ? null : Path.GetPathRoot(_currentPath);
+            var cur = root is null ? default
+                : list.FirstOrDefault(s => s.Ready &&
+                    s.Label.StartsWith(root.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase));
+            _heartFrac = cur.Total > 0 ? (float)((double)cur.Free / cur.Total) : 1f;
+        }
+        catch (Exception) { /* keep previous fraction */ }
+    }
+
+    private void ScanIncoming()
+    {
+        var list = new List<(string, long)>();
+        try
+        {
+            foreach (var f in new DirectoryInfo(DownloadsPath()).GetFiles())
+            {
+                string ext = f.Extension.ToLowerInvariant();
+                if (ext is ".crdownload" or ".part" or ".download" or ".tmp")
+                    list.Add((f.Name, f.Length));
+            }
+        }
+        catch (Exception) { /* Downloads unreadable — leave list empty */ }
+        _incoming = list;
+    }
+
+    // =====================================================================
+    //  File-system model
+    // =====================================================================
 
     private void LoadLocation(string? path)
     {
@@ -124,8 +259,7 @@ public sealed class MainForm : Form
                         ? d.Name.TrimEnd('\\', '/')
                         : $"{d.Name.TrimEnd('\\', '/')} {d.VolumeLabel}",
                     FullPath = d.RootDirectory.FullName,
-                    IsDir = true,
-                    IsDrive = true,
+                    IsDir = true, IsDrive = true,
                 };
                 if (d.IsReady) e.Size = d.TotalSize - d.TotalFreeSpace;
                 list.Add(e);
@@ -167,9 +301,79 @@ public sealed class MainForm : Form
         }
 
         _currentPath = path;
-        _entries = list;
+        _entries = Sorted(list);
         _selected = 0;
+        SetupWatcher(path);
+        RefreshDriveCache();
+        _dirty[0] = _dirty[3] = true;
         Invalidate();
+    }
+
+    private List<Entry> Sorted(List<Entry> list)
+    {
+        var dirs = list.Where(e => e.IsDir);
+        var files = list.Where(e => !e.IsDir);
+        dirs = _sort switch
+        {
+            SortMode.Newest => dirs.OrderByDescending(e => e.Modified ?? DateTime.MinValue),
+            _ => dirs.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase),
+        };
+        files = _sort switch
+        {
+            SortMode.Newest => files.OrderByDescending(e => e.Modified ?? DateTime.MinValue),
+            SortMode.Size => files.OrderByDescending(e => e.Size),
+            _ => files.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase),
+        };
+        // newest-first puts fresh downloads in slot one, where your cursor starts
+        return (_sort == SortMode.Newest ? files.Concat(dirs) : dirs.Concat(files)).ToList();
+    }
+
+    private void ReloadKeepingSelection()
+    {
+        string? keep = SelectedEntry?.FullPath;
+        string? path = _currentPath;
+        int oldIndex = _selected;
+        LoadLocation(path);
+        if (keep is not null)
+        {
+            int ix = _entries.FindIndex(e => e.FullPath == keep);
+            _selected = ix >= 0 ? ix : Math.Min(oldIndex, Math.Max(0, _entries.Count - 1));
+        }
+    }
+
+    private void SetupWatcher(string? path)
+    {
+        _watcher?.Dispose();
+        _watcher = null;
+        if (path is null) return;
+        try
+        {
+            _watcher = new FileSystemWatcher(path)
+            {
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
+                             | NotifyFilters.LastWrite | NotifyFilters.Size,
+                SynchronizingObject = this,
+                EnableRaisingEvents = true,
+            };
+            _watcher.Created += (_, fe) =>
+            {
+                string ext = Path.GetExtension(fe.Name ?? "").ToLowerInvariant();
+                if (ext is not (".crdownload" or ".part" or ".download" or ".tmp"))
+                    _bannerQueue.Enqueue($"You got the {fe.Name}!");
+                _pendingRefresh = true;
+            };
+            _watcher.Deleted += (_, _) => _pendingRefresh = true;
+            _watcher.Renamed += (_, re) =>
+            {
+                // a finishing download renames .crdownload/.part -> real name
+                string oldExt = Path.GetExtension(re.OldName ?? "").ToLowerInvariant();
+                if (oldExt is ".crdownload" or ".part" or ".download" or ".tmp")
+                    _bannerQueue.Enqueue($"You got the {re.Name}!");
+                _pendingRefresh = true;
+            };
+            _watcher.Changed += (_, _) => _pendingRefresh = true;
+        }
+        catch (Exception) { /* e.g. network share without change notify */ }
     }
 
     private void NavigateUp()
@@ -178,14 +382,13 @@ public sealed class MainForm : Form
         var parent = Directory.GetParent(_currentPath);
         var child = _currentPath;
         LoadLocation(parent?.FullName);
-        // put the cursor back on the folder we came from
         int idx = _entries.FindIndex(e =>
             string.Equals(e.FullPath.TrimEnd('\\', '/'), child.TrimEnd('\\', '/'),
                 StringComparison.OrdinalIgnoreCase));
         if (idx >= 0) _selected = idx;
     }
 
-    private void Activate(Entry e)
+    private void ActivateEntry(Entry e)
     {
         if (e.IsDir)
         {
@@ -198,12 +401,37 @@ public sealed class MainForm : Form
                 Process.Start(new ProcessStartInfo(e.FullPath) { UseShellExecute = true });
                 _statusOverride = $"You used the {e.Name}!";
             }
-            catch (Exception)
-            {
-                _statusOverride = "You can't use that here!";
-            }
+            catch (Exception) { _statusOverride = "You can't use that here!"; }
+            _dirty[0] = true;
             Invalidate();
         }
+    }
+
+    private void RevealInExplorer()
+    {
+        try
+        {
+            if (SelectedEntry is { } e)
+                Process.Start("explorer.exe", $"/select,\"{e.FullPath}\"");
+            else if (_currentPath is not null)
+                Process.Start("explorer.exe", $"\"{_currentPath}\"");
+            _statusOverride = "Revealed in the other world (Explorer).";
+        }
+        catch (Exception) { _statusOverride = "Explorer would not answer the call..."; }
+        _dirty[0] = true;
+    }
+
+    private void CopyPath()
+    {
+        string? p = SelectedEntry?.FullPath ?? _currentPath;
+        if (p is null) return;
+        try
+        {
+            Clipboard.SetText(p);
+            _statusOverride = "Path copied to clipboard!";
+        }
+        catch (Exception) { _statusOverride = "The clipboard resisted. Try again."; }
+        _dirty[0] = true;
     }
 
     private Entry? SelectedEntry =>
@@ -215,25 +443,40 @@ public sealed class MainForm : Form
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
+        bool onItems = Mod4(_screenIx) == 0;
         switch (keyData)
         {
-            case Keys.Left:  MoveSelection(-1); return true;
-            case Keys.Right: MoveSelection(+1); return true;
-            case Keys.Up:    MoveSelection(-Cols); return true;
-            case Keys.Down:  MoveSelection(+Cols); return true;
-            case Keys.PageUp:   MoveSelection(-PageSize); return true;
+            case Keys.Left:
+                if (onItems) MoveSelection(-1); else Rotate(-1);
+                return true;
+            case Keys.Right:
+                if (onItems) MoveSelection(+1); else Rotate(+1);
+                return true;
+            case Keys.Up: if (onItems) MoveSelection(-Cols); return true;
+            case Keys.Down: if (onItems) MoveSelection(+Cols); return true;
+            case Keys.PageUp: MoveSelection(-PageSize); return true;
             case Keys.PageDown: MoveSelection(+PageSize); return true;
+            case Keys.Home: MoveSelection(int.MinValue / 2); return true;
+            case Keys.End: MoveSelection(int.MaxValue / 2); return true;
             case Keys.Enter:
-                if (SelectedEntry is { } e) Activate(e);
+                if (SelectedEntry is { } e) ActivateEntry(e);
                 return true;
             case Keys.Back: NavigateUp(); return true;
-            case Keys.Q: SwitchScreen(-1); return true;
-            case Keys.E: SwitchScreen(+1); return true;
+            case Keys.Q: Rotate(-1); return true;
+            case Keys.E: Rotate(+1); return true;
+            case Keys.D: LoadLocation(DownloadsPath()); return true;
+            case Keys.R: RevealInExplorer(); return true;
+            case Keys.P: CopyPath(); return true;
+            case Keys.S:
+                _sort = (SortMode)(((int)_sort + 1) % 3);
+                _statusOverride = $"Sorting by: {_sort}";
+                ReloadKeepingSelection();
+                return true;
             case Keys.H:
                 _showHidden = !_showHidden;
-                LoadLocation(_currentPath);
+                ReloadKeepingSelection();
                 return true;
-            case Keys.F5: LoadLocation(_currentPath); return true;
+            case Keys.F5: ReloadKeepingSelection(); return true;
             case Keys.D1: AssignFavorite(0); return true;
             case Keys.D2: AssignFavorite(1); return true;
             case Keys.D3: AssignFavorite(2); return true;
@@ -242,17 +485,15 @@ public sealed class MainForm : Form
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
+    private void Rotate(int dir) { _screenIx += dir; _statusOverride = ""; }
+
     private void MoveSelection(int delta)
     {
         if (_entries.Count == 0) return;
-        _selected = Math.Clamp(_selected + delta, 0, _entries.Count - 1);
+        long target = (long)_selected + delta;
+        _selected = (int)Math.Clamp(target, 0, _entries.Count - 1);
         _statusOverride = "";
-        Invalidate();
-    }
-
-    private void SwitchScreen(int dir)
-    {
-        _screen = (_screen + dir + ScreenTitles.Length) % ScreenTitles.Length;
+        _dirty[0] = _dirty[3] = true;
         Invalidate();
     }
 
@@ -261,7 +502,8 @@ public sealed class MainForm : Form
         if (SelectedEntry is { IsDir: false } e)
         {
             _cFavorites[slot] = e;
-            _statusOverride = $"{e.Name} is now on {new[] { "C-Left", "C-Down", "C-Right" }[slot]}!";
+            _statusOverride =
+                $"{e.Name} is now on {new[] { "C-Left", "C-Down", "C-Right" }[slot]}!";
             Invalidate();
         }
     }
@@ -269,53 +511,61 @@ public sealed class MainForm : Form
     protected override void OnMouseDown(MouseEventArgs me)
     {
         base.OnMouseDown(me);
-        if (_leftArrow.Contains(me.Location)) { SwitchScreen(-1); return; }
-        if (_rightArrow.Contains(me.Location)) { SwitchScreen(+1); return; }
         for (int i = 0; i < 3; i++)
         {
             if (_cButtonRects[i].Contains(me.Location))
             {
-                if (_cFavorites[i] is { } fav) Activate(fav);
+                if (_cFavorites[i] is { } fav) ActivateEntry(fav);
                 return;
             }
         }
-        if (_screen == 0 && SlotIndexAt(me.Location) is { } idx)
+        if (_frontRect.Contains(me.Location))
         {
-            _selected = idx;
-            _statusOverride = "";
-            Invalidate();
+            if (Mod4(_screenIx) == 0 && SlotIndexAt(me.Location) is { } idx)
+            {
+                _selected = idx;
+                _statusOverride = "";
+                _dirty[0] = _dirty[3] = true;
+                Invalidate();
+            }
         }
+        else if (!_frontRect.IsEmpty && me.X < _frontRect.Left) Rotate(-1); // click a leaning tablet
+        else if (!_frontRect.IsEmpty && me.X > _frontRect.Right) Rotate(+1);
     }
 
     protected override void OnMouseDoubleClick(MouseEventArgs me)
     {
         base.OnMouseDoubleClick(me);
-        if (_screen == 0 && SlotIndexAt(me.Location) is { } idx)
+        if (Mod4(_screenIx) == 0 && SlotIndexAt(me.Location) is { } idx)
         {
             _selected = idx;
-            Activate(_entries[idx]);
+            ActivateEntry(_entries[idx]);
         }
     }
 
     protected override void OnMouseWheel(MouseEventArgs me)
     {
         base.OnMouseWheel(me);
-        MoveSelection(me.Delta > 0 ? -Cols : +Cols);
+        if (Mod4(_screenIx) == 0) MoveSelection(me.Delta > 0 ? -Cols : +Cols);
     }
 
     private int? SlotIndexAt(Point p)
     {
-        if (!_gridArea.Contains(p)) return null;
-        float cw = _gridArea.Width / Cols, ch = _gridArea.Height / Rows;
-        int col = (int)((p.X - _gridArea.X) / cw);
-        int row = (int)((p.Y - _gridArea.Y) / ch);
-        int page = _selected / PageSize;
+        if (_frontRect.Width <= 0 || !_frontRect.Contains(p)) return null;
+        // map screen point into 960x640 panel-texture coordinates
+        float u = (p.X - _frontRect.X) / _frontRect.Width * PanelW;
+        float v = (p.Y - _frontRect.Y) / _frontRect.Height * PanelH;
+        var grid = ItemGridArea();
+        if (u < grid.X || v < grid.Y || u >= grid.Right || v >= grid.Bottom) return null;
+        int col = (int)((u - grid.X) / (grid.Width / Cols));
+        int row = (int)((v - grid.Y) / (grid.Height / Rows));
+        int page = _entries.Count == 0 ? 0 : _selected / PageSize;
         int idx = page * PageSize + row * Cols + col;
         return idx < _entries.Count ? idx : null;
     }
 
     // =====================================================================
-    //  Painting
+    //  Painting — room, carousel, HUD
     // =====================================================================
 
     protected override void OnPaint(PaintEventArgs pe)
@@ -324,118 +574,198 @@ public sealed class MainForm : Form
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
-        DrawBackground(g);
-        DrawHeader(g);
+        DrawRoom(g);
+
+        for (int i = 0; i < 4; i++)
+            if (_dirty[i]) { RenderPanel(i); _dirty[i] = false; }
+
+        DrawCarousel(g);
         DrawHud(g);
-
-        switch (_screen)
-        {
-            case 0: DrawItemScreen(g); break;
-            case 1: DrawMapScreen(g); break;
-            case 2: DrawQuestScreen(g); break;
-            case 3: DrawEquipmentScreen(g); break;
-        }
-
         DrawTextBox(g);
+        DrawBanners(g);
     }
 
-    private void DrawBackground(Graphics g)
+    private void DrawRoom(Graphics g)
     {
         var r = ClientRectangle;
         if (r.Width <= 0 || r.Height <= 0) return;
-        using (var lg = new LinearGradientBrush(r, BgTop, BgBottom, 90f))
+        using (var lg = new LinearGradientBrush(r, Pal.BgTop, Pal.BgBottom, 90f))
             g.FillRectangle(lg, r);
 
-        // vignette so the middle glows like the paused game behind the menu
-        using var path = new GraphicsPath();
-        path.AddEllipse(-r.Width * 0.25f, -r.Height * 0.25f, r.Width * 1.5f, r.Height * 1.5f);
-        using var vignette = new PathGradientBrush(path)
+        // procedural wood grain — deterministic so it doesn't shimmer
+        var rnd = new Random(42);
+        using var grain = new Pen(Color.FromArgb(26, 0, 0, 0), 3f);
+        for (int i = 0; i < 40; i++)
+        {
+            float x = (float)(rnd.NextDouble() * r.Width);
+            float wob = 6 + (float)rnd.NextDouble() * 18;
+            using var path = new GraphicsPath();
+            var pts = new PointF[8];
+            for (int k = 0; k < 8; k++)
+                pts[k] = new PointF(
+                    x + (float)Math.Sin(k * 0.9 + i) * wob, r.Height * k / 7f);
+            path.AddCurve(pts);
+            g.DrawPath(grain, path);
+        }
+
+        using var vig = new GraphicsPath();
+        vig.AddEllipse(-r.Width * 0.25f, -r.Height * 0.25f, r.Width * 1.5f, r.Height * 1.5f);
+        using var vignette = new PathGradientBrush(vig)
         {
             CenterColor = Color.FromArgb(0, 0, 0, 0),
-            SurroundColors = new[] { Color.FromArgb(160, 0, 0, 0) },
+            SurroundColors = new[] { Color.FromArgb(170, 0, 0, 0) },
         };
         g.FillRectangle(vignette, r);
     }
 
-    private void DrawHeader(Graphics g)
+    private void RenderPanel(int ix)
     {
-        float w = ClientSize.Width;
-        string title = ScreenTitles[_screen];
-
-        var size = g.MeasureString(title, _titleFont);
-        float x = (w - size.Width) / 2f, y = 18f;
-
-        using (var shadow = new SolidBrush(Color.FromArgb(200, 0, 0, 0)))
-            g.DrawString(title, _titleFont, shadow, x + 3, y + 3);
-        var tr = new RectangleF(x, y, size.Width, size.Height);
-        using (var gold = new LinearGradientBrush(tr, GoldLight, GoldDark, 90f))
-            g.DrawString(title, _titleFont, gold, x, y);
-
-        // Z / R shoulder arrows to rotate between subscreens
-        float ay = y + size.Height / 2f;
-        _leftArrow = DrawShoulderArrow(g, 40, ay, true,
-            ScreenTitles[(_screen + ScreenTitles.Length - 1) % ScreenTitles.Length], "Q");
-        _rightArrow = DrawShoulderArrow(g, w - 40, ay, false,
-            ScreenTitles[(_screen + 1) % ScreenTitles.Length], "E");
+        using var g = Graphics.FromImage(_panels[ix]);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        g.Clear(Color.Transparent);
+        switch (ix)
+        {
+            case 0: RenderItemPanel(g); break;
+            case 1: RenderClaudeMapPanel(g); break;
+            case 2: RenderQuestPanel(g); break;
+            case 3: RenderEquipmentPanel(g); break;
+        }
     }
 
-    private RectangleF DrawShoulderArrow(Graphics g, float cx, float cy, bool left, string label, string key)
+    private void DrawCarousel(Graphics g)
     {
-        float s = 16f;
-        var pts = left
-            ? new[] { new PointF(cx - s, cy), new PointF(cx + s, cy - s), new PointF(cx + s, cy + s) }
-            : new[] { new PointF(cx + s, cy), new PointF(cx - s, cy - s), new PointF(cx - s, cy + s) };
-        using (var b = new SolidBrush(Gold)) g.FillPolygon(b, pts);
-        using (var p = new Pen(GoldDark, 2f)) g.DrawPolygon(p, pts);
+        float w = ClientSize.Width, h = ClientSize.Height;
+        float f = w * 0.74f;               // focal length tuned so side tablets peek in
+        float cx = w / 2f, cy = h * 0.44f;
 
-        using var white = new SolidBrush(Color.FromArgb(220, 240, 230, 210));
-        var lblSize = g.MeasureString(label, _tinyFont);
-        float lx = left ? cx - s : cx + s - lblSize.Width;
-        g.DrawString($"[{key}]", _tinyFont, white, left ? cx - s : cx + s - 24, cy + s + 2);
-        g.DrawString(label, _tinyFont, white, lx, cy + s + 15);
+        _frontRect = RectangleF.Empty;
 
-        return new RectangleF(cx - s - 8, cy - s - 8, s * 2 + 16, s * 2 + 40);
+        // painter's algorithm: farthest tablets first
+        var order = Enumerable.Range(0, 4)
+            .Select(i => (i, z: Radius * (float)Math.Cos(i * HalfPi - _rotation) + CamBack))
+            .OrderByDescending(t => t.z);
+
+        foreach (var (i, _) in order)
+            DrawPanel3D(g, i, i * HalfPi - _rotation, f, cx, cy);
     }
+
+    private void DrawPanel3D(Graphics g, int ix, float theta, float f, float cx, float cy)
+    {
+        // world-space panel: center on ring, tangent = "right" direction
+        float dx = (float)Math.Sin(theta), dz = (float)Math.Cos(theta);
+        float centerX = Radius * dx, centerZ = Radius * dz + CamBack;
+        float rightX = dz, rightZ = -dx;
+
+        float brightness = Math.Clamp(0.42f + 0.58f * dz, 0f, 1f);
+        using var attrs = new ImageAttributes();
+        attrs.SetColorMatrix(new ColorMatrix
+        {
+            Matrix00 = brightness, Matrix11 = brightness, Matrix22 = brightness, Matrix33 = 1f,
+        });
+
+        bool facing = dz > 0.9995f;
+        if (facing)
+        {
+            // flat-on: single high-quality blit, and this is the click target
+            float z = centerZ;
+            float halfW = f * (PanelW3D / 2) / z, halfH = f * (PanelH3D / 2) / z;
+            _frontRect = new RectangleF(cx - halfW, cy - halfH, halfW * 2, halfH * 2);
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            g.DrawImage(_panels[ix],
+                new[]
+                {
+                    new PointF(_frontRect.X, _frontRect.Y),
+                    new PointF(_frontRect.Right, _frontRect.Y),
+                    new PointF(_frontRect.X, _frontRect.Bottom),
+                },
+                new RectangleF(0, 0, PanelW, PanelH), GraphicsUnit.Pixel, attrs);
+            return;
+        }
+
+        // angled: render in vertical strips with per-strip depth (fake perspective)
+        g.InterpolationMode = InterpolationMode.Bilinear;
+        const int Strips = 96;
+        float clientW = ClientSize.Width;
+        for (int s = 0; s < Strips; s++)
+        {
+            float t0 = (float)s / Strips, t1 = (float)(s + 1) / Strips;
+            float x0 = centerX + rightX * (t0 - 0.5f) * PanelW3D;
+            float z0 = centerZ + rightZ * (t0 - 0.5f) * PanelW3D;
+            float x1 = centerX + rightX * (t1 - 0.5f) * PanelW3D;
+            float z1 = centerZ + rightZ * (t1 - 0.5f) * PanelW3D;
+            if (z0 < NearZ || z1 < NearZ) continue;
+
+            float sx0 = cx + f * x0 / z0, sx1 = cx + f * x1 / z1;
+            if (sx1 <= sx0) continue;                        // back-facing
+            if (sx1 < -40 || sx0 > clientW + 40) continue;   // off screen
+
+            float h0 = f * (PanelH3D / 2) / z0, h1 = f * (PanelH3D / 2) / z1;
+            g.DrawImage(_panels[ix],
+                new[]
+                {
+                    new PointF(sx0, cy - h0),
+                    new PointF(sx1, cy - h1),
+                    new PointF(sx0, cy + h0),
+                },
+                new RectangleF(t0 * PanelW, 0, (t1 - t0) * PanelW, PanelH),
+                GraphicsUnit.Pixel, attrs);
+        }
+    }
+
+    // =====================================================================
+    //  HUD (fixed overlay, like the always-on-screen game HUD)
+    // =====================================================================
 
     private void DrawHud(Graphics g)
     {
-        // hearts: remaining free space on the current drive
-        double frac = 1.0;
-        try
-        {
-            var root = _currentPath is null ? null : Path.GetPathRoot(_currentPath);
-            if (root is not null)
-            {
-                var d = new DriveInfo(root);
-                if (d.IsReady) frac = (double)d.TotalFreeSpace / d.TotalSize;
-            }
-        }
-        catch (Exception) { /* drive vanished mid-paint; keep full hearts */ }
-
+        // hearts: free space on the current drive (sampled, never queried mid-paint)
+        double frac = _heartFrac;
         for (int i = 0; i < 10; i++)
-        {
-            double heartFill = Math.Clamp(frac * 10 - i, 0, 1);
-            DrawHeart(g, 28 + i * 26, 26, 11f, (float)heartFill);
-        }
-        using (var w = new SolidBrush(Color.FromArgb(200, 240, 230, 210)))
-            g.DrawString("LIFE (free space)", _tinyFont, w, 26, 44);
+            Sprites.DrawHeart(g, 28 + i * 26, 26, 11f,
+                (float)Math.Clamp(frac * 10 - i, 0, 1));
 
-        // rupee counter: how many treasures in this folder
-        DrawRupee(g, 30, ClientSize.Height - 46, 11f);
-        using (var w = new SolidBrush(Color.White))
-            g.DrawString(_entries.Count.ToString("000"), _counterFont, w, 46, ClientSize.Height - 58);
+        // magic meter: RAM in use
+        var bar = new RectangleF(22, 44, 190, 11);
+        using (var back = new SolidBrush(Color.FromArgb(180, 8, 10, 26)))
+            g.FillRectangle(back, bar);
+        using (var green = new SolidBrush(Pal.MagicGreen))
+            g.FillRectangle(green, bar.X + 1, bar.Y + 1,
+                (bar.Width - 2) * Math.Clamp(_sys.RamLoad, 0f, 1f), bar.Height - 2);
+        using (var edge = new Pen(Pal.GoldDark, 1.6f))
+            g.DrawRectangle(edge, bar.X, bar.Y, bar.Width, bar.Height);
+        using (var wt = new SolidBrush(Color.FromArgb(210, 240, 230, 210)))
+            g.DrawString(
+                $"disk free {frac * 100:0}%   ram {_sys.RamLoad * 100:0}%   cpu {_sys.CpuLoad * 100:0}%",
+                _tinyFont, wt, 22, 58);
+
+        // rupee counter: items here
+        Sprites.DrawRupee(g, 30, ClientSize.Height - 46, 11f);
+        using (var wt = new SolidBrush(Color.White))
+            g.DrawString(_entries.Count.ToString("000"), _counterFont, wt, 46, ClientSize.Height - 60);
 
         DrawCButtons(g);
+
+        // screen name + rotate hints under the top edge
+        string title = ScreenTitles[Mod4(_screenIx)];
+        var ts = g.MeasureString(title, _headFont);
+        Sprites.GoldText(g, title, _headFont, (ClientSize.Width - ts.Width) / 2, 8);
+        using (var dim = new SolidBrush(Color.FromArgb(170, 230, 220, 200)))
+        {
+            string prev = ScreenTitles[Mod4(_screenIx - 1)], next = ScreenTitles[Mod4(_screenIx + 1)];
+            g.DrawString($"◀ Q  {prev}", _tinyFont, dim, 14, ClientSize.Height / 2f - 8);
+            var ns = g.MeasureString($"{next}  E ▶", _tinyFont);
+            g.DrawString($"{next}  E ▶", _tinyFont, dim,
+                ClientSize.Width - ns.Width - 14, ClientSize.Height / 2f - 8);
+        }
     }
 
     private void DrawCButtons(Graphics g)
     {
-        float bx = ClientSize.Width - 150, by = 30, r = 21f;
+        float bx = ClientSize.Width - 168, by = 30, r = 21f;
         var centers = new[]
         {
-            new PointF(bx, by + 26),          // C-Left
-            new PointF(bx + 52, by + 52),     // C-Down
-            new PointF(bx + 104, by + 26),    // C-Right
+            new PointF(bx, by + 26), new PointF(bx + 52, by + 52), new PointF(bx + 104, by + 26),
         };
         string[] glyphs = { "◀", "▼", "▶" };
 
@@ -445,7 +775,7 @@ public sealed class MainForm : Form
             var rect = new RectangleF(c.X - r, c.Y - r, r * 2, r * 2);
             _cButtonRects[i] = rect;
 
-            using (var fill = new SolidBrush(CButtonYellow)) g.FillEllipse(fill, rect);
+            using (var fill = new SolidBrush(Pal.CButtonYellow)) g.FillEllipse(fill, rect);
             using (var edge = new Pen(Color.FromArgb(140, 90, 20), 2.5f)) g.DrawEllipse(edge, rect);
             using (var glyph = new SolidBrush(Color.FromArgb(150, 96, 20)))
             {
@@ -458,474 +788,100 @@ public sealed class MainForm : Form
             var ns = g.MeasureString(name, _tinyFont);
             g.DrawString(name, _tinyFont, txt, c.X - ns.Width / 2, c.Y + 2);
         }
-        using (var w = new SolidBrush(Color.FromArgb(200, 240, 230, 210)))
-            g.DrawString("favorites: press 1/2/3 to assign", _tinyFont, w, bx - 26, by + 78);
+        using (var wt = new SolidBrush(Color.FromArgb(190, 240, 230, 210)))
+            g.DrawString("quick-launch · 1/2/3 assigns", _tinyFont, wt, bx - 26, by + 78);
     }
-
-    // ---------------------------------------------------------------- item screen
-
-    private void DrawItemScreen(Graphics g)
-    {
-        float w = ClientSize.Width, h = ClientSize.Height;
-        float gridW = Math.Min(w - 200, 900);
-        float gridH = h - 320;
-        _gridArea = new RectangleF((w - gridW) / 2, 130, gridW, gridH);
-
-        int page = _entries.Count == 0 ? 0 : _selected / PageSize;
-        int pages = Math.Max(1, (_entries.Count + PageSize - 1) / PageSize);
-
-        float cw = _gridArea.Width / Cols, ch = _gridArea.Height / Rows;
-
-        for (int i = 0; i < PageSize; i++)
-        {
-            int idx = page * PageSize + i;
-            int row = i / Cols, col = i % Cols;
-            var cell = new RectangleF(_gridArea.X + col * cw, _gridArea.Y + row * ch, cw, ch);
-            var slot = RectangleF.Inflate(cell, -6, -6);
-
-            using (var path = RoundedRect(slot, 10))
-            {
-                using (var fill = new SolidBrush(SlotFill)) g.FillPath(fill, path);
-                using (var edge = new Pen(SlotEdge, 1.6f)) g.DrawPath(edge, path);
-            }
-
-            if (idx >= _entries.Count) continue;
-            var e = _entries[idx];
-
-            float iconSize = Math.Min(slot.Width, slot.Height) * 0.42f;
-            DrawEntryIcon(g, e, slot.X + slot.Width / 2, slot.Y + slot.Height * 0.38f, iconSize);
-
-            string name = e.Name;
-            using var nameBrush = new SolidBrush(e.Hidden
-                ? Color.FromArgb(150, 200, 200, 200) : Color.FromArgb(235, 240, 235, 220));
-            var nameRect = new RectangleF(slot.X + 4, slot.Y + slot.Height * 0.62f,
-                slot.Width - 8, slot.Height * 0.36f);
-            using var fmt = new StringFormat
-            {
-                Alignment = StringAlignment.Center,
-                Trimming = StringTrimming.EllipsisCharacter,
-                FormatFlags = StringFormatFlags.LineLimit,
-            };
-            g.DrawString(name, _tinyFont, nameBrush, nameRect, fmt);
-
-            if (idx == _selected) DrawCursor(g, slot);
-        }
-
-        if (pages > 1)
-        {
-            using var w2 = new SolidBrush(Color.FromArgb(220, 240, 230, 210));
-            string label = $"page {page + 1} / {pages}   (PgUp / PgDn)";
-            var ls = g.MeasureString(label, _smallFont);
-            g.DrawString(label, _smallFont, w2,
-                _gridArea.Right - ls.Width, _gridArea.Bottom + 6);
-        }
-    }
-
-    private void DrawCursor(Graphics g, RectangleF slot)
-    {
-        float glow = (float)(Math.Sin(_pulse) * 0.5 + 0.5); // 0..1
-        var r = RectangleF.Inflate(slot, 3 + glow * 3, 3 + glow * 3);
-        using var path = RoundedRect(r, 12);
-        using (var outer = new Pen(Color.FromArgb((int)(90 + glow * 120), Gold), 6f))
-            g.DrawPath(outer, path);
-        using (var inner = new Pen(Color.FromArgb(240, GoldLight), 2.4f))
-            g.DrawPath(inner, path);
-    }
-
-    // ---------------------------------------------------------------- map screen
-
-    private void DrawMapScreen(Graphics g)
-    {
-        float w = ClientSize.Width;
-        float x = w * 0.28f, y = 150;
-
-        using var whiteB = new SolidBrush(Color.FromArgb(235, 240, 235, 220));
-        using var dimB = new SolidBrush(Color.FromArgb(160, 200, 195, 180));
-
-        g.DrawString("DUNGEON FLOORS (this path)", _smallFont, dimB, x, y);
-        y += 28;
-
-        var components = new List<(string label, string? path)> { ("WORLD MAP (drives)", null) };
-        if (_currentPath is not null)
-        {
-            string acc = "";
-            foreach (var part in _currentPath.Split(
-                new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
-                StringSplitOptions.RemoveEmptyEntries))
-            {
-                acc = acc.Length == 0 ? part + Path.DirectorySeparatorChar : Path.Combine(acc, part);
-                components.Add((part, acc));
-            }
-        }
-
-        for (int i = 0; i < components.Count; i++)
-        {
-            bool current = i == components.Count - 1;
-            string floor = i == 0 ? "✦" : $"{components.Count - 1 - i}F";
-            var rect = new RectangleF(x, y, w * 0.44f, 34);
-            using (var path = RoundedRect(rect, 8))
-            {
-                using var fill = new SolidBrush(current
-                    ? Color.FromArgb(200, 60, 44, 110) : SlotFill);
-                g.FillPath(fill, path);
-                using var edge = new Pen(current ? Gold : SlotEdge, current ? 2.4f : 1.4f);
-                g.DrawPath(edge, path);
-            }
-            g.DrawString(floor, _smallFont, dimB, x + 10, y + 8);
-            g.DrawString(components[i].label, _bodyFont,
-                current ? new SolidBrush(GoldLight) : whiteB, x + 52, y + 5);
-            if (current)
-            {
-                // the blinking "you are here" arrow from the dungeon map
-                float bob = (float)Math.Sin(_pulse) * 4f;
-                var tip = new PointF(x - 16 + bob, y + 17);
-                var pts = new[] { tip, new(tip.X - 14, tip.Y - 9), new(tip.X - 14, tip.Y + 9) };
-                using var b = new SolidBrush(HeartRed);
-                g.FillPolygon(b, pts);
-            }
-            y += 40;
-        }
-
-        g.DrawString("BACKSPACE — go up one floor        ENTER on the Item screen — descend",
-            _smallFont, dimB, x, y + 14);
-    }
-
-    // ---------------------------------------------------------------- quest screen
-
-    private void DrawQuestScreen(Graphics g)
-    {
-        float w = ClientSize.Width;
-        float x = w * 0.18f, y = 150;
-
-        using var whiteB = new SolidBrush(Color.FromArgb(235, 240, 235, 220));
-        using var dimB = new SolidBrush(Color.FromArgb(160, 200, 195, 180));
-
-        foreach (var d in DriveInfo.GetDrives())
-        {
-            var rect = new RectangleF(x, y, w * 0.64f, 58);
-            using (var path = RoundedRect(rect, 10))
-            {
-                using var fill = new SolidBrush(SlotFill);
-                g.FillPath(fill, path);
-                using var edge = new Pen(SlotEdge, 1.6f);
-                g.DrawPath(edge, path);
-            }
-
-            string label = d.Name.TrimEnd('\\', '/');
-            if (d.IsReady && !string.IsNullOrEmpty(d.VolumeLabel)) label += "  " + d.VolumeLabel;
-            g.DrawString(label, _bodyFont, whiteB, x + 16, y + 8);
-
-            if (d.IsReady)
-            {
-                // magic-meter style capacity bar
-                float used = (float)((double)(d.TotalSize - d.TotalFreeSpace) / d.TotalSize);
-                var bar = new RectangleF(x + 16, y + 36, rect.Width - 220, 12);
-                using (var back = new SolidBrush(Color.FromArgb(160, 10, 14, 30)))
-                    g.FillRectangle(back, bar);
-                using (var green = new SolidBrush(RupeeGreen))
-                    g.FillRectangle(green, bar.X, bar.Y, bar.Width * used, bar.Height);
-                using (var edge = new Pen(GoldDark, 1.4f))
-                    g.DrawRectangle(edge, bar.X, bar.Y, bar.Width, bar.Height);
-
-                string txt = $"{FormatBytes(d.TotalFreeSpace)} free of {FormatBytes(d.TotalSize)}";
-                var ts = g.MeasureString(txt, _smallFont);
-                g.DrawString(txt, _smallFont, dimB, rect.Right - ts.Width - 14, y + 32);
-            }
-            else
-            {
-                g.DrawString("not ready", _smallFont, dimB, x + 16, y + 34);
-            }
-            y += 70;
-        }
-
-        int hidden = _entries.Count(e => e.Hidden);
-        g.DrawString($"Gold Skulltulas found here (hidden items): {hidden}" +
-                     (_showHidden ? "" : "   — press H to reveal them"),
-            _smallFont, whiteB, x, y + 10);
-    }
-
-    // ---------------------------------------------------------------- equipment screen
-
-    private void DrawEquipmentScreen(Graphics g)
-    {
-        float w = ClientSize.Width;
-        using var whiteB = new SolidBrush(Color.FromArgb(235, 240, 235, 220));
-        using var dimB = new SolidBrush(Color.FromArgb(160, 200, 195, 180));
-        using var goldB = new SolidBrush(GoldLight);
-
-        var e = SelectedEntry;
-        if (e is null)
-        {
-            g.DrawString("Nothing is selected on the Item screen.", _bodyFont, dimB, w * 0.3f, 200);
-            return;
-        }
-
-        DrawEntryIcon(g, e, w * 0.28f, 260, 110);
-
-        float x = w * 0.42f, y = 170;
-        void Row(string k, string v)
-        {
-            g.DrawString(k, _smallFont, dimB, x, y);
-            g.DrawString(v, _bodyFont, whiteB, x, y + 16);
-            y += 52;
-        }
-
-        g.DrawString(e.Name, _counterFont, goldB, x, y);
-        y += 44;
-        Row("KIND", e.IsDrive ? "Drive" : e.IsDir ? "Folder" : $"File ({(e.Ext.Length > 0 ? e.Ext : "no extension")})");
-        Row("LOCATION", e.FullPath);
-        if (e.Size >= 0) Row("SIZE", FormatBytes(e.Size));
-        if (e.Modified is { } m) Row("LAST WRITE", m.ToString("yyyy-MM-dd  HH:mm"));
-        if (e.Created is { } c) Row("CREATED", c.ToString("yyyy-MM-dd  HH:mm"));
-        Row("HIDDEN", e.Hidden ? "Yes" : "No");
-    }
-
-    // ---------------------------------------------------------------- text box
 
     private void DrawTextBox(Graphics g)
     {
         float w = ClientSize.Width, h = ClientSize.Height;
-        var box = new RectangleF(w * 0.14f, h - 130, w * 0.72f, 86);
+        var box = new RectangleF(w * 0.16f, h - 122, w * 0.68f, 74);
 
-        using (var path = RoundedRect(box, 22))
+        using (var path = Sprites.RoundedRect(box, 20))
         {
-            using (var fill = new SolidBrush(TextBoxFill)) g.FillPath(fill, path);
+            using (var fill = new SolidBrush(Pal.TextBoxFill)) g.FillPath(fill, path);
             using (var edge = new Pen(Color.FromArgb(220, 150, 150, 190), 2f)) g.DrawPath(edge, path);
         }
 
         string msg = _statusOverride.Length > 0 ? _statusOverride : ComposeMessage();
-        var inner = RectangleF.Inflate(box, -20, -14);
         using var fmt = new StringFormat
         {
             Alignment = StringAlignment.Center,
             LineAlignment = StringAlignment.Center,
             Trimming = StringTrimming.EllipsisCharacter,
         };
-        using var white = new SolidBrush(Color.White);
-        g.DrawString(msg, _bodyFont, white, inner, fmt);
+        using (var white = new SolidBrush(Color.White))
+            g.DrawString(msg, _bodyFont, white, RectangleF.Inflate(box, -18, -10), fmt);
 
-        // the blinking "continue" triangle at the bottom-right of OoT text boxes
         if (Math.Sin(_pulse * 0.8) > 0)
         {
-            var tip = new PointF(box.Right - 26, box.Bottom - 12);
-            var pts = new[] { tip, new(tip.X - 10, tip.Y - 12), new(tip.X + 10, tip.Y - 12) };
-            using var b = new SolidBrush(NameCyan);
-            g.FillPolygon(b, pts);
+            var tip = new PointF(box.Right - 24, box.Bottom - 10);
+            using var b = new SolidBrush(Pal.NameCyan);
+            g.FillPolygon(b, new[] { tip, new(tip.X - 9, tip.Y - 11), new(tip.X + 9, tip.Y - 11) });
+        }
+
+        using var dim = new SolidBrush(Color.FromArgb(150, 220, 210, 190));
+        string hints = "ENTER open · BKSP up · Q/E rotate · D downloads · S sort · P copy path · R reveal · H hidden · 1/2/3 C-buttons";
+        var hs = g.MeasureString(hints, _tinyFont);
+        g.DrawString(hints, _tinyFont, dim, (w - hs.Width) / 2, h - 30);
+    }
+
+    private void DrawBanners(Graphics g)
+    {
+        float y = 86;
+        foreach (var (text, _) in _banners.TakeLast(3))
+        {
+            var size = g.MeasureString(text, _headFont);
+            float x = (ClientSize.Width - size.Width) / 2;
+            float glow = (float)(Math.Sin(_pulse * 1.4) * 0.5 + 0.5);
+            using (var halo = new SolidBrush(Color.FromArgb((int)(70 + glow * 90), Pal.Gold)))
+                g.FillEllipse(halo, x - 40, y - 8, size.Width + 80, size.Height + 16);
+            Sprites.DrawStar(g, x - 16, y + size.Height / 2, 9, Pal.GoldLight);
+            Sprites.DrawStar(g, x + size.Width + 16, y + size.Height / 2, 9, Pal.GoldLight);
+            Sprites.GoldText(g, text, _headFont, x, y);
+            y += size.Height + 14;
         }
     }
 
     private string ComposeMessage()
     {
-        if (_screen != 0)
-            return _currentPath ?? "The World Map — choose a realm to explore.";
+        // memoized: folder-content counts must not run on every paint
+        int front = Mod4(_screenIx);
+        string? selPath = SelectedEntry?.FullPath;
+        if (front == _msgKeyScreen && selPath == _msgKeySel && _entries.Count == _msgKeyCount
+            && front != 1) // the Claude map line refreshes with its snapshot
+            return _msgCache;
+        _msgKeyScreen = front; _msgKeySel = selPath; _msgKeyCount = _entries.Count;
+        return _msgCache = BuildMessage(front);
+    }
+
+    private string BuildMessage(int front)
+    {
+        if (front == 1)
+            return _claude.Found
+                ? $"Claude is mapped: {_claude.Connectors.Count} connectors, " +
+                  $"{_claude.Sessions.Count(s => s.Active)} agents active, " +
+                  $"{_claude.RunningProcesses} claude processes running."
+                : "No Claude signs found in this land (~/.claude not found).";
+        if (front == 2) return "The state of your quest: drives, memory, and hidden treasures.";
+        if (front == 3) return SelectedEntry is { } sel
+            ? $"Inspecting the {sel.Name}."
+            : "Nothing is selected on the Item screen.";
 
         var e = SelectedEntry;
-        if (e is null)
-            return "This place is empty... not even a single rupee.";
-        if (e.IsDrive)
-            return $"The realm of {e.Name}. Press ENTER to travel there!";
+        if (e is null) return "This place is empty... not even a single rupee.";
+        if (e.IsDrive) return $"The realm of {e.Name}. Press ENTER to travel there!";
         if (e.IsDir)
         {
             int n = -1;
             try { n = Directory.EnumerateFileSystemEntries(e.FullPath).Count(); }
-            catch (Exception) { /* locked folder — leave the count a mystery */ }
+            catch (Exception) { /* sealed folder */ }
             return n >= 0
                 ? $"You found {e.Name}! It holds {n} treasure{(n == 1 ? "" : "s")}."
                 : $"You found {e.Name}! Its contents are sealed away.";
         }
-        return $"You got the {e.Name}! " +
-               (e.Size >= 0 ? $"It weighs {FormatBytes(e.Size)}. " : "") +
-               "Press ENTER to use it.";
-    }
-
-    // =====================================================================
-    //  Drawn "sprites" — all original vector art
-    // =====================================================================
-
-    private void DrawEntryIcon(Graphics g, Entry e, float cx, float cy, float s)
-    {
-        if (e.IsDrive) { DrawGem(g, cx, cy, s); return; }
-        if (e.IsDir) { DrawChest(g, cx, cy, s); return; }
-        switch (e.Ext)
-        {
-            case ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".webp" or ".ico":
-                DrawLens(g, cx, cy, s); break;
-            case ".mp3" or ".wav" or ".flac" or ".ogg" or ".m4a" or ".mid":
-                DrawOcarina(g, cx, cy, s); break;
-            case ".exe" or ".bat" or ".cmd" or ".msi" or ".com":
-                DrawSword(g, cx, cy, s); break;
-            case ".zip" or ".rar" or ".7z" or ".tar" or ".gz":
-                DrawPouch(g, cx, cy, s); break;
-            case ".txt" or ".md" or ".doc" or ".docx" or ".pdf" or ".rtf" or ".log":
-                DrawScroll(g, cx, cy, s); break;
-            default:
-                DrawBottle(g, cx, cy, s); break;
-        }
-    }
-
-    private static void DrawChest(Graphics g, float cx, float cy, float s)
-    {
-        var body = new RectangleF(cx - s * 0.9f, cy - s * 0.2f, s * 1.8f, s * 0.9f);
-        var lid = new RectangleF(cx - s * 0.9f, cy - s * 0.75f, s * 1.8f, s * 0.85f);
-        using (var wood = new SolidBrush(Color.FromArgb(146, 84, 40))) g.FillRectangle(wood, body);
-        using (var woodDark = new SolidBrush(Color.FromArgb(112, 60, 26))) g.FillPie(woodDark, lid.X, lid.Y, lid.Width, lid.Height, 180, 180);
-        using (var band = new Pen(Gold, s * 0.14f))
-        {
-            g.DrawLine(band, cx, cy - s * 0.72f, cx, cy + s * 0.68f);
-            g.DrawRectangle(band, body.X, body.Y, body.Width, body.Height);
-        }
-        using var keyhole = new SolidBrush(Color.FromArgb(60, 34, 10));
-        g.FillEllipse(keyhole, cx - s * 0.12f, cy + s * 0.02f, s * 0.24f, s * 0.24f);
-    }
-
-    private static void DrawGem(Graphics g, float cx, float cy, float s)
-    {
-        var pts = new[]
-        {
-            new PointF(cx, cy - s), new PointF(cx + s * 0.7f, cy - s * 0.3f),
-            new PointF(cx + s * 0.5f, cy + s * 0.9f), new PointF(cx - s * 0.5f, cy + s * 0.9f),
-            new PointF(cx - s * 0.7f, cy - s * 0.3f),
-        };
-        using (var fill = new LinearGradientBrush(
-            new RectangleF(cx - s, cy - s, s * 2, s * 2),
-            Color.FromArgb(150, 210, 255), Color.FromArgb(30, 90, 180), 60f))
-            g.FillPolygon(fill, pts);
-        using var edge = new Pen(Color.FromArgb(220, 240, 250, 255), 2f);
-        g.DrawPolygon(edge, pts);
-        g.DrawLine(edge, pts[0], pts[3]);
-        g.DrawLine(edge, pts[0], pts[2]);
-    }
-
-    private static void DrawLens(Graphics g, float cx, float cy, float s)
-    {
-        using (var glass = new SolidBrush(Color.FromArgb(200, 120, 60, 160)))
-            g.FillEllipse(glass, cx - s * 0.7f, cy - s * 0.7f, s * 1.4f, s * 1.4f);
-        using (var rim = new Pen(HeartRed, s * 0.14f))
-            g.DrawEllipse(rim, cx - s * 0.7f, cy - s * 0.7f, s * 1.4f, s * 1.4f);
-        using (var pupil = new SolidBrush(Color.FromArgb(240, 240, 240, 255)))
-            g.FillEllipse(pupil, cx - s * 0.22f, cy - s * 0.22f, s * 0.44f, s * 0.44f);
-        using var handle = new Pen(HeartRed, s * 0.16f);
-        g.DrawLine(handle, cx + s * 0.5f, cy + s * 0.5f, cx + s * 0.95f, cy + s * 0.95f);
-    }
-
-    private static void DrawOcarina(Graphics g, float cx, float cy, float s)
-    {
-        using (var clay = new SolidBrush(Color.FromArgb(90, 140, 210)))
-            g.FillEllipse(clay, cx - s * 0.95f, cy - s * 0.45f, s * 1.9f, s * 1.05f);
-        using (var mouth = new SolidBrush(Color.FromArgb(70, 110, 175)))
-            g.FillRectangle(mouth, cx - s * 0.2f, cy - s * 0.85f, s * 0.4f, s * 0.5f);
-        using var hole = new SolidBrush(Color.FromArgb(25, 40, 70));
-        for (int i = 0; i < 3; i++)
-            g.FillEllipse(hole, cx - s * 0.5f + i * s * 0.42f, cy - s * 0.12f, s * 0.2f, s * 0.2f);
-    }
-
-    private static void DrawSword(Graphics g, float cx, float cy, float s)
-    {
-        var blade = new[]
-        {
-            new PointF(cx, cy - s), new PointF(cx + s * 0.16f, cy - s * 0.7f),
-            new PointF(cx + s * 0.16f, cy + s * 0.35f), new PointF(cx - s * 0.16f, cy + s * 0.35f),
-            new PointF(cx - s * 0.16f, cy - s * 0.7f),
-        };
-        using (var steel = new LinearGradientBrush(
-            new RectangleF(cx - s, cy - s, s * 2, s * 2), Color.White, Color.FromArgb(140, 150, 170), 0f))
-            g.FillPolygon(steel, blade);
-        using (var guard = new SolidBrush(Color.FromArgb(40, 60, 160)))
-            g.FillRectangle(guard, cx - s * 0.5f, cy + s * 0.32f, s, s * 0.18f);
-        using var hilt = new Pen(Color.FromArgb(40, 60, 160), s * 0.22f);
-        g.DrawLine(hilt, cx, cy + s * 0.5f, cx, cy + s * 0.95f);
-    }
-
-    private static void DrawPouch(Graphics g, float cx, float cy, float s)
-    {
-        using (var leather = new SolidBrush(Color.FromArgb(120, 82, 45)))
-            g.FillEllipse(leather, cx - s * 0.75f, cy - s * 0.45f, s * 1.5f, s * 1.4f);
-        using (var tie = new Pen(Gold, s * 0.12f))
-            g.DrawArc(tie, cx - s * 0.4f, cy - s * 0.75f, s * 0.8f, s * 0.5f, 200, 140);
-        using var neck = new SolidBrush(Color.FromArgb(96, 62, 30));
-        g.FillRectangle(neck, cx - s * 0.28f, cy - s * 0.68f, s * 0.56f, s * 0.3f);
-    }
-
-    private static void DrawScroll(Graphics g, float cx, float cy, float s)
-    {
-        var paper = new RectangleF(cx - s * 0.6f, cy - s * 0.8f, s * 1.2f, s * 1.6f);
-        using (var fill = new SolidBrush(Color.FromArgb(235, 224, 190))) g.FillRectangle(fill, paper);
-        using (var edge = new Pen(Color.FromArgb(150, 120, 70), 2f)) g.DrawRectangle(edge, paper.X, paper.Y, paper.Width, paper.Height);
-        using var line = new Pen(Color.FromArgb(120, 100, 70), Math.Max(1f, s * 0.06f));
-        for (int i = 1; i <= 4; i++)
-            g.DrawLine(line, paper.X + s * 0.15f, paper.Y + i * paper.Height / 5,
-                paper.Right - s * 0.15f, paper.Y + i * paper.Height / 5);
-    }
-
-    private static void DrawBottle(Graphics g, float cx, float cy, float s)
-    {
-        using (var glass = new SolidBrush(Color.FromArgb(170, 170, 220, 235)))
-        {
-            g.FillEllipse(glass, cx - s * 0.5f, cy - s * 0.35f, s, s * 1.2f);
-            g.FillRectangle(glass, cx - s * 0.18f, cy - s * 0.8f, s * 0.36f, s * 0.5f);
-        }
-        using (var cork = new SolidBrush(Color.FromArgb(150, 105, 60)))
-            g.FillRectangle(cork, cx - s * 0.2f, cy - s * 0.95f, s * 0.4f, s * 0.22f);
-        using var edge = new Pen(Color.FromArgb(210, 220, 245, 255), 1.8f);
-        g.DrawEllipse(edge, cx - s * 0.5f, cy - s * 0.35f, s, s * 1.2f);
-    }
-
-    private static void DrawHeart(Graphics g, float cx, float cy, float s, float fill)
-    {
-        using var path = new GraphicsPath();
-        path.AddBezier(cx, cy + s, cx - s * 1.4f, cy - s * 0.1f, cx - s * 0.7f, cy - s, cx, cy - s * 0.35f);
-        path.AddBezier(cx, cy - s * 0.35f, cx + s * 0.7f, cy - s, cx + s * 1.4f, cy - s * 0.1f, cx, cy + s);
-        using (var back = new SolidBrush(Color.FromArgb(120, 40, 8, 12))) g.FillPath(back, path);
-        if (fill > 0)
-        {
-            var old = g.Clip;
-            var bounds = path.GetBounds();
-            g.SetClip(new RectangleF(bounds.X, bounds.Bottom - bounds.Height * fill,
-                bounds.Width, bounds.Height * fill), CombineMode.Intersect);
-            using (var red = new SolidBrush(HeartRed)) g.FillPath(red, path);
-            g.Clip = old;
-        }
-        using var edge = new Pen(Color.FromArgb(200, 255, 190, 190), 1.4f);
-        g.DrawPath(edge, path);
-    }
-
-    private static void DrawRupee(Graphics g, float cx, float cy, float s)
-    {
-        var pts = new[]
-        {
-            new PointF(cx, cy - s), new PointF(cx + s * 0.62f, cy - s * 0.45f),
-            new PointF(cx + s * 0.62f, cy + s * 0.45f), new PointF(cx, cy + s),
-            new PointF(cx - s * 0.62f, cy + s * 0.45f), new PointF(cx - s * 0.62f, cy - s * 0.45f),
-        };
-        using (var green = new SolidBrush(RupeeGreen)) g.FillPolygon(green, pts);
-        using var edge = new Pen(Color.FromArgb(230, 250, 230), 1.6f);
-        g.DrawPolygon(edge, pts);
-        g.DrawLine(edge, pts[1], pts[4]);
-        g.DrawLine(edge, pts[2], pts[5]);
-    }
-
-    // =====================================================================
-    //  Helpers
-    // =====================================================================
-
-    private static GraphicsPath RoundedRect(RectangleF r, float radius)
-    {
-        float d = radius * 2;
-        var path = new GraphicsPath();
-        path.AddArc(r.X, r.Y, d, d, 180, 90);
-        path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-        path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-        path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-        path.CloseFigure();
-        return path;
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        string[] units = { "B", "KB", "MB", "GB", "TB" };
-        double v = bytes;
-        int u = 0;
-        while (v >= 1024 && u < units.Length - 1) { v /= 1024; u++; }
-        return u == 0 ? $"{v:0} {units[u]}" : $"{v:0.#} {units[u]}";
+        string age = e.Modified is { } m ? $" Obtained {Sprites.TimeAgo(m)}." : "";
+        return $"You got the {e.Name}!" +
+               (e.Size >= 0 ? $" It weighs {Sprites.FormatBytes(e.Size)}." : "") + age;
     }
 }
